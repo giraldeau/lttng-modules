@@ -401,6 +401,78 @@ notrace void probe_net_napi_complete(void *_data, struct napi_struct *n)
 }
 #endif
 
+void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __user *uservaddr,
+	int addrlen, int ret);
+
+DEFINE_MARKER_TP(net, socket_connect_inet, socket_connect, probe_socket_connect_inet, "addr #n4u%lu port #n2u%hu");
+
+notrace void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __user *uservaddr,
+	int addrlen, int ret)
+{
+	struct marker *marker;
+	struct serialize_42 data;
+	struct sockaddr_in kaddr;
+
+	if (uservaddr->sa_family != AF_INET)
+		return;
+
+	copy_from_user(&kaddr, uservaddr, sizeof(struct sockaddr));
+	data.f1 = kaddr.sin_addr.s_addr;
+	data.f2 = kaddr.sin_port;
+
+	marker = &GET_MARKER(net, socket_connect_inet);
+	ltt_specialized_trace(marker, marker->single.probe_private,
+		&data, serialize_sizeof(data), sizeof(uint32_t));
+}
+
+void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __user *upeer_sockaddr,
+	int __user *upeer_addrlen, int flags, int ret);
+
+DEFINE_MARKER_TP(net, socket_accept_inet, socket_accept, probe_socket_accept_inet, "addr #n4u%lu port #n2u%hu");
+
+notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __user *upeer_sockaddr,
+	int __user *upeer_addrlen, int flags, int ret)
+{
+	struct marker *marker;
+	struct serialize_42 data;
+	struct sockaddr_in kaddr;
+
+	if (upeer_sockaddr->sa_family != AF_INET)
+		return;
+
+	copy_from_user(&kaddr, upeer_sockaddr, sizeof(struct sockaddr));
+	data.f1 = kaddr.sin_addr.s_addr;
+	data.f2 = kaddr.sin_port;
+
+	marker = &GET_MARKER(net, socket_accept_inet);
+	ltt_specialized_trace(marker, marker->single.probe_private,
+		&data, serialize_sizeof(data), sizeof(uint32_t));
+}
+
+void probe_socket_bind_inet(void *_data, int fd, struct sockaddr __user *umyaddr, int addrlen,
+	int ret);
+
+DEFINE_MARKER_TP(net, socket_bind_inet, socket_bind, probe_socket_bind_inet, "addr #n4u%lu port #n2u%hu");
+
+notrace void probe_socket_bind_inet(void *_data, int fd, struct sockaddr __user *umyaddr, int addrlen,
+	int ret)
+{
+	struct marker *marker;
+	struct serialize_42 data;
+	struct sockaddr_in kaddr;
+
+	if (umyaddr->sa_family != AF_INET)
+		return;
+
+	copy_from_user(&kaddr, umyaddr, sizeof(struct sockaddr));
+	data.f1 = kaddr.sin_addr.s_addr;
+	data.f2 = kaddr.sin_port;
+
+	marker = &GET_MARKER(net, socket_bind_inet);
+	ltt_specialized_trace(marker, marker->single.probe_private,
+		&data, serialize_sizeof(data), sizeof(uint32_t));
+}
+
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Mathieu Desnoyers");
 MODULE_DESCRIPTION("Net Tracepoint Probes");
