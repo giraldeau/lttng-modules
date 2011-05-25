@@ -184,4 +184,18 @@ struct serialize_l4412228 {
 	uint64_t f8;
 	unsigned char end_field[0];
 } LTT_ALIGN;
+
+struct serialize_42 {
+	uint32_t f1;
+	uint16_t f2;
+	unsigned char end_field[0];
+} LTT_ALIGN;
+
+struct serialize_4422 {
+	uint32_t f1;
+	uint32_t f2;
+	uint16_t f3;
+	uint16_t f4;
+	unsigned char end_field[0];
+} LTT_ALIGN;
 #endif /* _LTT_TYPE_SERIALIZER_H */
