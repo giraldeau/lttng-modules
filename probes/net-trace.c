@@ -421,11 +421,13 @@ notrace void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __us
 	struct sockaddr_in kaddr;
 	struct inet_sock *sk;
 
-	if (uservaddr->sa_family != AF_INET)
+	if (copy_from_user(&kaddr, uservaddr, sizeof(struct sockaddr)) > 0)
+		return;
+
+	if (kaddr.sin_family != AF_INET)
 		return;
 
 	sk = inet_sk(sock->sk);
-	copy_from_user(&kaddr, uservaddr, sizeof(struct sockaddr));
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = sk->inet_saddr;
 	data.f3 = sk->inet_dport;
@@ -450,11 +452,13 @@ notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __use
 	struct sockaddr_in kaddr;
 	struct inet_sock *sk;
 
-	if (upeer_sockaddr->sa_family != AF_INET)
+	if (copy_from_user(&kaddr, upeer_sockaddr, sizeof(struct sockaddr)) > 0)
+		return;
+
+	if (kaddr.sin_family != AF_INET)
 		return;
 
 	sk = inet_sk(sock->sk);
-	copy_from_user(&kaddr, upeer_sockaddr, sizeof(struct sockaddr));
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = sk->inet_saddr;
 	data.f3 = sk->inet_dport;
@@ -477,10 +481,12 @@ notrace void probe_socket_bind_inet(void *_data, int fd, struct sockaddr __user 
 	struct serialize_42 data;
 	struct sockaddr_in kaddr;
 
-	if (umyaddr->sa_family != AF_INET)
+	if (copy_from_user(&kaddr, umyaddr, sizeof(struct sockaddr)) > 0)
 		return;
 
-	copy_from_user(&kaddr, umyaddr, sizeof(struct sockaddr));
+	if (kaddr.sin_family != AF_INET)
+		return;
+
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = kaddr.sin_port;
 
