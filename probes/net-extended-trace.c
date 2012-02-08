@@ -32,10 +32,6 @@
 
 long get_ino_from_skb(struct sk_buff *skb) {
     struct sock *sock;
-    struct socket *socket;
-    struct file *file;
-    struct dentry *dentry;
-    struct inode *inode;
     if (skb == NULL) {
         printk(FCT " skb null\n");
         goto error;
@@ -45,27 +41,7 @@ long get_ino_from_skb(struct sk_buff *skb) {
         printk(FCT " sk null\n");
         goto error;
     }
-    socket = sock->sk_socket;
-    if (socket == NULL) {
-        printk(FCT " socket null\n");
-        goto error;
-    }
-    file = socket->file;
-    if (file == NULL) {
-        printk(FCT " file null\n");
-        goto error;
-    }
-    dentry = file->f_path.dentry;
-    if (dentry == NULL) {
-        printk(FCT " dentry null\n");
-        goto error;
-    }
-    inode = dentry->d_inode;
-    if (inode == NULL) {
-        printk(FCT " inode null\n");
-        goto error;
-    }
-    return inode->i_ino;
+    return SOCK_INODE(sock->sk_socket)->i_ino;
 
 error:
     return 0;
@@ -124,17 +100,18 @@ notrace void probe_net_dev_xmit_extended(void *_data, struct sk_buff *skb)
 void probe_tcpv4_rcv_extended(void *_data, struct sk_buff *skb);
 
 DEFINE_MARKER_TP(net, tcpv4_rcv_extended, net_tcpv4_rcv,
-	probe_tcpv4_rcv_extended, "skb 0x%lX saddr #n4u%lu daddr #n4u%lu "
+	probe_tcpv4_rcv_extended, "inode %lu skb 0x%lX saddr #n4u%lu daddr #n4u%lu "
 	"tot_len #n2u%hu ihl #1u%u source #n2u%hu dest #n2u%hu seq #n4u%lu "
 	"ack_seq #n4u%lu doff #1u%u ack #1u%u rst #1u%u syn #1u%u fin #1u%u");
 
 notrace void probe_tcpv4_rcv_extended(void *_data, struct sk_buff *skb)
 {
 	struct marker *marker;
-	struct serialize_l4421224411111 data;
+	struct serialize_ll4421224411111 data;
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *th = tcp_hdr(skb);
 
+	data.f0 = get_ino_from_skb(skb);
 	data.f1 = (unsigned long)skb;
 	data.f2 = iph->saddr;
 	data.f3 = iph->daddr;

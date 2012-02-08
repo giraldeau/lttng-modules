@@ -14,6 +14,8 @@
 #include <trace/ipv4.h>
 #include <trace/ipv6.h>
 #include <trace/socket.h>
+#include <linux/fs.h> // temp
+#include <linux/file.h>
 
 #include "../ltt-type-serializer.h"
 
@@ -108,7 +110,8 @@ void probe_socket_create(void *_data, int family, int type, int protocol,
 {
 	trace_mark_tp(net, socket_create, socket_create, probe_socket_create,
 		"family %d type %d protocol %d sock %p inode %lu ret %d",
-		family, type, protocol, sock, SOCK_INODE(sock)->i_ino, ret);
+	    family, type, protocol, sock, SOCK_INODE(sock)->i_ino, ret);
+
 }
 
 void probe_socket_bind(void *_data, int fd, struct sockaddr __user *umyaddr, int addrlen,
@@ -400,25 +403,24 @@ notrace void probe_net_napi_complete(void *_data, struct napi_struct *n)
 		&data, sizeof(data), sizeof(data));
 }
 #endif
-
-#define MARKER_FORMAT_INET4 	\
+#define MARKER_FORMAT_INET4_INODE 	\
+    "inode %lu "        \
 	"daddr #n4u%lu "	\
 	"saddr #n4u%lu "	\
 	"dport #n2u%hu "	\
-	"sport #n2u%hu "    \
-    "inode %lu"
+	"sport #n2u%hu"
 
 void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __user *uservaddr,
 	int addrlen, int ret, struct socket *sock);
 
 DEFINE_MARKER_TP(net, socket_connect_inet, socket_connect, probe_socket_connect_inet,
-		MARKER_FORMAT_INET4);
+        MARKER_FORMAT_INET4_INODE);
 
 notrace void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __user *uservaddr,
 	int addrlen, int ret, struct socket *sock)
 {
 	struct marker *marker;
-	struct serialize_4422l data;
+	struct serialize_l4422 data;
 	struct sockaddr_in kaddr;
 	struct inet_sock *sk;
 	struct inode *inode;
@@ -436,30 +438,31 @@ notrace void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __us
 	}
 
 	sk = inet_sk(sock->sk);
+	data.f0 = inode->i_ino;
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = sk->inet_saddr;
 	data.f3 = sk->inet_dport;
 	data.f4 = sk->inet_sport;
-	data.f5 = inode->i_ino;
 
 	marker = &GET_MARKER(net, socket_connect_inet);
 	ltt_specialized_trace(marker, marker->single.probe_private,
-		&data, serialize_sizeof(data), sizeof(uint32_t));
+		&data, serialize_sizeof(data), sizeof(unsigned long));
 }
 
 void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __user *upeer_sockaddr,
 	int __user *upeer_addrlen, int flags, int ret, struct socket *sock);
 
 DEFINE_MARKER_TP(net, socket_accept_inet, socket_accept, probe_socket_accept_inet,
-		MARKER_FORMAT_INET4);
+		MARKER_FORMAT_INET4_INODE);
 
 notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __user *upeer_sockaddr,
 	int __user *upeer_addrlen, int flags, int ret, struct socket *sock)
 {
 	struct marker *marker;
-	struct serialize_4422 data;
+	struct serialize_l4422 data;
 	struct sockaddr_in kaddr;
 	struct inet_sock *sk;
+	struct inode *inode;
 
 	if (sock->state != SS_CONNECTED)
 	    return;
@@ -472,11 +475,17 @@ notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __use
 
 	sk = inet_sk(sock->sk);
 	if (sk == NULL) {
-	    printk("ERROR: probe_socket_accept_inet NULL sk\n");
-	    printk("sock->type=%d sock->flags=%lu sock->state=%u\n", sock->type, sock->flags, sock->state);
+	    printk("ERROR: probe_socket_accept_inet sk == NULL\n");
 	    return;
 	}
 
+	inode = SOCK_INODE(sock);
+	if (inode == NULL) {
+	    printk("ERROR: probe_socket_accept_inet inode == NULL\n");
+	    return;
+	}
+
+	data.f0 = inode->i_ino;
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = sk->inet_saddr;
 	data.f3 = sk->inet_dport;
@@ -484,7 +493,7 @@ notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __use
 
 	marker = &GET_MARKER(net, socket_accept_inet);
 	ltt_specialized_trace(marker, marker->single.probe_private,
-		&data, serialize_sizeof(data), sizeof(uint32_t));
+		&data, serialize_sizeof(data), sizeof(unsigned long));
 }
 
 void probe_socket_bind_inet(void *_data, int fd, struct sockaddr __user *umyaddr, int addrlen,
