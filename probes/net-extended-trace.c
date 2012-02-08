@@ -28,10 +28,53 @@
 
 #include "../ltt-type-serializer.h"
 
+#define FCT "get_ino_from_skb"
+
+long get_ino_from_skb(struct sk_buff *skb) {
+    struct sock *sock;
+    struct socket *socket;
+    struct file *file;
+    struct dentry *dentry;
+    struct inode *inode;
+    if (skb == NULL) {
+        printk(FCT " skb null\n");
+        goto error;
+    }
+    sock = skb->sk;
+    if (sock == NULL) {
+        printk(FCT " sk null\n");
+        goto error;
+    }
+    socket = sock->sk_socket;
+    if (socket == NULL) {
+        printk(FCT " socket null\n");
+        goto error;
+    }
+    file = socket->file;
+    if (file == NULL) {
+        printk(FCT " file null\n");
+        goto error;
+    }
+    dentry = file->f_path.dentry;
+    if (dentry == NULL) {
+        printk(FCT " dentry null\n");
+        goto error;
+    }
+    inode = dentry->d_inode;
+    if (inode == NULL) {
+        printk(FCT " inode null\n");
+        goto error;
+    }
+    return inode->i_ino;
+
+error:
+    return 0;
+}
+
 void probe_net_dev_xmit_extended(void *_data, struct sk_buff *skb);
 
 DEFINE_MARKER_TP(net, dev_xmit_extended, net_dev_xmit,
-	probe_net_dev_xmit_extended, "skb 0x%lX network_protocol #n2u%hu "
+	probe_net_dev_xmit_extended, "inode %lu skb 0x%lX network_protocol #n2u%hu "
 	"transport_protocol #1u%u saddr #n4u%lu daddr #n4u%lu "
 	"tot_len #n2u%hu ihl #1u%u source #n2u%hu dest #n2u%hu seq #n4u%lu "
 	"ack_seq #n4u%lu doff #1u%u ack #1u%u rst #1u%u syn #1u%u fin #1u%u");
@@ -39,17 +82,18 @@ DEFINE_MARKER_TP(net, dev_xmit_extended, net_dev_xmit,
 notrace void probe_net_dev_xmit_extended(void *_data, struct sk_buff *skb)
 {
 	struct marker *marker;
-	struct serialize_l214421224411111 data;
+	struct serialize_ll214421224411111 data;
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *th = tcp_hdr(skb);
 	struct udphdr *uh = udp_hdr(skb);
 
-	memset(&data, 0, sizeof(struct serialize_l214421224411111));
+	memset(&data, 0, sizeof(struct serialize_ll214421224411111));
 
 	data.f1 = (unsigned long)skb;
 	data.f2 = skb->protocol;
 
 	if (ntohs(skb->protocol) == ETH_P_IP) {
+	    data.f0 = get_ino_from_skb(skb);
 		data.f3 = ip_hdr(skb)->protocol;
 		data.f4 = iph->saddr;
 		data.f5 = iph->daddr;

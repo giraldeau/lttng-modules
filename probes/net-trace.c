@@ -107,8 +107,8 @@ void probe_socket_create(void *_data, int family, int type, int protocol,
 	struct socket *sock, int ret)
 {
 	trace_mark_tp(net, socket_create, socket_create, probe_socket_create,
-		"family %d type %d protocol %d sock %p ret %d",
-		family, type, protocol, sock, ret);
+		"family %d type %d protocol %d sock %p inode %lu ret %d",
+		family, type, protocol, sock, SOCK_INODE(sock)->i_ino, ret);
 }
 
 void probe_socket_bind(void *_data, int fd, struct sockaddr __user *umyaddr, int addrlen,
@@ -405,7 +405,8 @@ notrace void probe_net_napi_complete(void *_data, struct napi_struct *n)
 	"daddr #n4u%lu "	\
 	"saddr #n4u%lu "	\
 	"dport #n2u%hu "	\
-	"sport #n2u%hu"
+	"sport #n2u%hu "    \
+    "inode %lu"
 
 void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __user *uservaddr,
 	int addrlen, int ret, struct socket *sock);
@@ -417,9 +418,10 @@ notrace void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __us
 	int addrlen, int ret, struct socket *sock)
 {
 	struct marker *marker;
-	struct serialize_4422 data;
+	struct serialize_4422l data;
 	struct sockaddr_in kaddr;
 	struct inet_sock *sk;
+	struct inode *inode;
 
 	if (copy_from_user(&kaddr, uservaddr, sizeof(struct sockaddr)) > 0)
 		return;
@@ -427,11 +429,18 @@ notrace void probe_socket_connect_inet(void *_data, int fd, struct sockaddr __us
 	if (kaddr.sin_family != AF_INET)
 		return;
 
+	inode = SOCK_INODE(sock);
+	if (inode == NULL) {
+	    printk("ERROR: probe_socket_connect_inet NULL inode\n");
+	    return;
+	}
+
 	sk = inet_sk(sock->sk);
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = sk->inet_saddr;
 	data.f3 = sk->inet_dport;
 	data.f4 = sk->inet_sport;
+	data.f5 = inode->i_ino;
 
 	marker = &GET_MARKER(net, socket_connect_inet);
 	ltt_specialized_trace(marker, marker->single.probe_private,
@@ -452,6 +461,9 @@ notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __use
 	struct sockaddr_in kaddr;
 	struct inet_sock *sk;
 
+	if (sock->state != SS_CONNECTED)
+	    return;
+
 	if (copy_from_user(&kaddr, upeer_sockaddr, sizeof(struct sockaddr)) > 0)
 		return;
 
@@ -459,6 +471,12 @@ notrace void probe_socket_accept_inet(void *_data, int fd, struct sockaddr __use
 		return;
 
 	sk = inet_sk(sock->sk);
+	if (sk == NULL) {
+	    printk("ERROR: probe_socket_accept_inet NULL sk\n");
+	    printk("sock->type=%d sock->flags=%lu sock->state=%u\n", sock->type, sock->flags, sock->state);
+	    return;
+	}
+
 	data.f1 = kaddr.sin_addr.s_addr;
 	data.f2 = sk->inet_saddr;
 	data.f3 = sk->inet_dport;

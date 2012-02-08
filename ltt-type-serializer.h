@@ -173,6 +173,28 @@ struct serialize_l214421224411111 {
 	uint8_t end_field[0];
 } LTT_ALIGN;
 
+struct serialize_ll214421224411111 {
+    unsigned long f0;
+    unsigned long f1;
+    uint16_t f2;
+    uint8_t f3;
+    uint32_t f4;
+    uint32_t f5;
+    uint16_t f6;
+    uint8_t f7;
+    uint16_t f8;
+    uint16_t f9;
+    uint32_t f10;
+    uint32_t f11;
+    uint8_t f12;
+    uint8_t f13;
+    uint8_t f14;
+    uint8_t f15;
+    uint8_t f16;
+    uint8_t end_field[0];
+} LTT_ALIGN;
+
+
 struct serialize_l4412228 {
 	unsigned long f1;
 	uint32_t f2;
@@ -192,10 +214,20 @@ struct serialize_42 {
 } LTT_ALIGN;
 
 struct serialize_4422 {
+    uint32_t f1;
+    uint32_t f2;
+    uint16_t f3;
+    uint16_t f4;
+    unsigned char end_field[0];
+} LTT_ALIGN;
+
+struct serialize_4422l {
 	uint32_t f1;
 	uint32_t f2;
 	uint16_t f3;
 	uint16_t f4;
+	unsigned long f5;
 	unsigned char end_field[0];
 } LTT_ALIGN;
+
 #endif /* _LTT_TYPE_SERIALIZER_H */
