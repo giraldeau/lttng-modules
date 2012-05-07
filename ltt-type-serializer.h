@@ -58,6 +58,12 @@ struct serialize_int_int_short {
 	unsigned char end_field[0];
 } LTT_ALIGN;
 
+struct serialize_long_long {
+    unsigned long f1;
+    unsigned long f2;
+    unsigned char end_field[0];
+} LTT_ALIGN;
+
 struct serialize_long_long_long {
 	unsigned long f1;
 	unsigned long f2;

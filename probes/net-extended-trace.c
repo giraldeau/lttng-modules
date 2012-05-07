@@ -32,19 +32,43 @@
 
 long get_ino_from_skb(struct sk_buff *skb) {
     struct sock *sock;
+    struct socket *socket;
     if (skb == NULL) {
-        printk(FCT " skb null\n");
+        //printk(FCT " skb null\n");
         goto error;
     }
     sock = skb->sk;
     if (sock == NULL) {
-        printk(FCT " sk null\n");
+        //printk(FCT " sk null\n");
         goto error;
     }
-    return SOCK_INODE(sock->sk_socket)->i_ino;
+    socket = sock->sk_socket;
+    if (socket == NULL) {
+        //printk(FCT " socket null\n");
+        goto error;
+    }
+    return SOCK_INODE(socket)->i_ino;
 
 error:
     return 0;
+}
+
+void probe_net_skb_set_owner(void *_data, struct sk_buff *skb);
+
+DEFINE_MARKER_TP(net, skb_set_owner, lttng_net_skb_set_owner, probe_net_skb_set_owner,
+    "skb %p inode %lu");
+
+notrace void probe_net_skb_set_owner(void *_data, struct sk_buff *skb)
+{
+    struct marker *marker;
+    struct serialize_long_long data;
+
+    data.f1 = (unsigned long)skb;
+    data.f2 = get_ino_from_skb(skb);
+
+    marker = &GET_MARKER(net, skb_set_owner);
+    ltt_specialized_trace(marker, marker->single.probe_private,
+        &data, serialize_sizeof(data), sizeof(unsigned long));
 }
 
 void probe_net_dev_xmit_extended(void *_data, struct sk_buff *skb);
