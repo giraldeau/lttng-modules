@@ -50,6 +50,10 @@
 #include "lttng-events.h"
 #include "lttng-tracer.h"
 
+/* include our own uevent tracepoint */
+#include "instrumentation/events/lttng-module/lttng.h"
+DEFINE_TRACE(lttng_uevent);
+
 /*
  * This is LTTng's own personal way to create a system call as an external
  * module. We use ioctl() on /proc/lttng.
@@ -252,9 +256,25 @@ long lttng_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 }
 
+/*
+ * lttng_write_uevent - expose kernel tracer to user-space
+ */
+
+static
+ssize_t lttng_write_uevent(struct file *file, const char __user *user_buf,
+		    size_t count, loff_t *fpos)
+{
+	if (count > LTTNG_UEVENT_SIZE)
+		count = LTTNG_UEVENT_SIZE;
+
+	trace_lttng_uevent(user_buf, count);
+	return count;
+}
+
 static const struct file_operations lttng_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = lttng_ioctl,
+	.write = lttng_write_uevent,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = lttng_ioctl,
 #endif

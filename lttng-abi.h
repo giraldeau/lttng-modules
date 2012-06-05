@@ -26,6 +26,7 @@
 #include <linux/fs.h>
 
 #define LTTNG_KERNEL_SYM_NAME_LEN	256
+#define LTTNG_UEVENT_SIZE		1024
 
 enum lttng_kernel_instrumentation {
 	LTTNG_KERNEL_TRACEPOINT	= 0,
