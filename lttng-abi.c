@@ -51,6 +51,12 @@
 #include "lttng-tracer.h"
 
 /*
+ * Required data structures to support lttng-probe-uevent
+ */
+DEFINE_RWLOCK(uevent_rwlock);
+write_ops_t lttng_uevent_handler;
+
+/*
  * This is LTTng's own personal way to create a system call as an external
  * module. We use ioctl() on /proc/lttng.
  */
@@ -252,9 +258,45 @@ long lttng_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 }
 
+/*
+ * lttng_uevent_set_handler - set handler functions for uevent
+ *
+ * Access to handler code is protected with rwlock in order to
+ * prevent the optional module to be removed while in use.
+ */
+
+void lttng_uevent_set_handler(write_ops_t handler)
+{
+	write_lock(&uevent_rwlock);
+	lttng_uevent_handler = handler;
+	write_unlock(&uevent_rwlock);
+}
+EXPORT_SYMBOL_GPL(lttng_uevent_set_handler);
+
+/*
+ * lttng_write_uevent - expose kernel tracer to user-space
+ */
+
+static
+ssize_t lttng_write_uevent(struct file *file, const char __user *ubuf,
+		size_t count, loff_t *fpos)
+{
+	int ret;
+
+	read_lock(&uevent_rwlock);
+	if (unlikely(lttng_uevent_handler == NULL)) {
+		read_unlock(&uevent_rwlock);
+		return -ENOSYS;
+	}
+	ret = (*lttng_uevent_handler)(file, ubuf, count, fpos);
+	read_unlock(&uevent_rwlock);
+	return ret;
+}
+
 static const struct file_operations lttng_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = lttng_ioctl,
+	.write = lttng_write_uevent,
 #ifdef CONFIG_COMPAT
 	.compat_ioctl = lttng_ioctl,
 #endif

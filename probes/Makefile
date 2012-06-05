@@ -14,6 +14,8 @@ obj-m += lttng-probe-sched.o
 obj-m += lttng-probe-irq.o
 obj-m += lttng-probe-signal.o
 obj-m += lttng-probe-timer.o
+obj-m += lttng-probe-uevent.o
+obj-m += lttng-uevent.o
 
 obj-m += lttng-probe-statedump.o
 
