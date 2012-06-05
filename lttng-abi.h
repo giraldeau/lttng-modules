@@ -27,6 +27,10 @@
 
 #define LTTNG_KERNEL_SYM_NAME_LEN	256
 
+typedef ssize_t (*write_ops_t) (struct file *, const char __user *, size_t,
+		loff_t *);
+void lttng_uevent_set_handler(write_ops_t handler);
+
 enum lttng_kernel_instrumentation {
 	LTTNG_KERNEL_TRACEPOINT	= 0,
 	LTTNG_KERNEL_KPROBE	= 1,
