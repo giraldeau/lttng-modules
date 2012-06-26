@@ -45,6 +45,7 @@
 #include <linux/swap.h>
 #include <linux/wait.h>
 #include <linux/mutex.h>
+#include <linux/net.h>
 
 #include "lttng-events.h"
 #include "wrapper/irqdesc.h"
@@ -150,6 +151,8 @@ void lttng_enumerate_task_fd(struct lttng_session *session,
 	struct file *filp;
 	unsigned int i;
 	const unsigned char *path;
+	struct socket *sock;
+	int err = 0;
 
 	task_lock(p);
 	if (!p->files)
@@ -166,6 +169,11 @@ void lttng_enumerate_task_fd(struct lttng_session *session,
 			IS_ERR(path) ?
 				filp->f_dentry->d_name.name :
 				path);
+		// FIXME: sock_from_file is exported since kernel >= 3.6-rc1
+		sock = sock_from_file(filp, &err);
+		if (sock) {
+			trace_lttng_statedump_inet_sock(session, p, i, sock->sk);
+		}
 	}
 	spin_unlock(&p->files->file_lock);
 unlock_task:

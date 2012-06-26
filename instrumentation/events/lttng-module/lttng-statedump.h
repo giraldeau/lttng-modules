@@ -160,6 +160,23 @@ TRACE_EVENT(lttng_statedump_interrupt,
 	TP_printk("")
 )
 
+TRACE_EVENT(lttng_statedump_inet_sock,
+	TP_PROTO(struct lttng_session *session,
+		struct task_struct *p, int fd, struct sock *sk),
+	TP_ARGS(session, p, fd, sk),
+	TP_STRUCT__entry(
+		__field(pid_t, pid)
+		__field(int, fd)
+		__field_hex(struct sock *, sk)
+	),
+	TP_fast_assign(
+		tp_assign(pid, p->tgid)
+		tp_assign(fd, fd)
+		tp_assign(sk, sk)
+	),
+	TP_printk("")
+)
+
 #endif /*  _TRACE_LTTNG_STATEDUMP_H */
 
 /* This part must be outside protection */
