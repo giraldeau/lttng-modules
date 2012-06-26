@@ -16,6 +16,8 @@ obj-m += lttng-probe-signal.o
 obj-m += lttng-probe-timer.o
 
 obj-m += lttng-probe-statedump.o
+obj-m += lttng-probe-net.o
+obj-m += lttng-net.o
 
 ifneq ($(CONFIG_KVM),)
 obj-m += lttng-probe-kvm.o
