@@ -45,6 +45,7 @@
 #include <linux/swap.h>
 #include <linux/wait.h>
 #include <linux/mutex.h>
+#include <linux/net.h>
 
 #include "lttng-events.h"
 #include "wrapper/irqdesc.h"
@@ -165,6 +166,11 @@ int lttng_dump_one_fd(const void *p, struct file *file, unsigned int fd)
 		goto end;
 	}
 	trace_lttng_statedump_file_descriptor(ctx->session, ctx->p, fd, s);
+	// FIXME: sock_from_file is exported since kernel >= 3.6-rc1
+	sock = sock_from_file(filp, &err);
+	if (sock) {
+		trace_lttng_statedump_inet_sock(session, p, i, sock->sk);
+	}
 end:
 	return 0;
 }
