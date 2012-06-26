@@ -39,6 +39,15 @@ endif # CONFIG_PERF_EVENTS
 
 obj-m += probes/
 obj-m += lib/
+obj-m += addons/
+
+#include $(src)/defsyms.mk
+
+#KBUILD_EXTRA_SYMBOLS += $(src)/defsyms.symvers
+#LDFLAGS_MODULE += -T $(src)/lttng-net.defsyms
+
+# FIXME: the file is not cleaned
+#clean-files := addons/lttng-addons.defsyms
 
 endif # CONFIG_TRACEPOINTS
 
@@ -47,6 +56,7 @@ else # KERNELRELEASE
 	PWD := $(shell pwd)
 	CFLAGS = $(EXTCFLAGS)
 
+		
 default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
 
