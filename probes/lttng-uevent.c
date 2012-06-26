@@ -39,9 +39,14 @@ ssize_t uevent_write_handler(struct file *file, const char __user *ubuf,
 	return count;
 }
 
+static const struct file_operations lttng_fops = {
+	.owner = THIS_MODULE,
+	.write = uevent_write_handler,
+};
+
 static int __init lttng_probe_uevent_init(void)
 {
-	lttng_uevent_set_handler(uevent_write_handler);
+	lttng_uevent_set_handler(&lttng_fops);
 	return 0;
 }
 

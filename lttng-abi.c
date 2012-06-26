@@ -51,10 +51,9 @@
 #include "lttng-tracer.h"
 
 /*
- * Required data structures to support lttng-probe-uevent
+ * Required data structure to support lttng-probe-uevent
  */
-DEFINE_RWLOCK(uevent_rwlock);
-write_ops_t lttng_uevent_handler;
+static struct file_operations *lttng_uevent_handler;
 
 /*
  * This is LTTng's own personal way to create a system call as an external
@@ -260,16 +259,19 @@ long lttng_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 /*
  * lttng_uevent_set_handler - set handler functions for uevent
- *
- * Access to handler code is protected with rwlock in order to
- * prevent the optional module to be removed while in use.
  */
 
-void lttng_uevent_set_handler(write_ops_t handler)
+void lttng_uevent_set_handler(struct file_operations *fops)
 {
-	write_lock(&uevent_rwlock);
-	lttng_uevent_handler = handler;
-	write_unlock(&uevent_rwlock);
+	if (lttng_uevent_handler) {
+		module_put(lttng_uevent_handler->owner);
+	}
+	if (fops && try_module_get(fops->owner)) {
+		lttng_uevent_handler = fops;
+		return;
+	}
+	lttng_uevent_handler = NULL;
+	return;
 }
 EXPORT_SYMBOL_GPL(lttng_uevent_set_handler);
 
@@ -281,16 +283,13 @@ static
 ssize_t lttng_write_uevent(struct file *file, const char __user *ubuf,
 		size_t count, loff_t *fpos)
 {
-	int ret;
+	struct file_operations *uev_handler;
 
-	read_lock(&uevent_rwlock);
-	if (unlikely(lttng_uevent_handler == NULL)) {
-		read_unlock(&uevent_rwlock);
+	uev_handler = ACCESS_ONCE(lttng_uevent_handler);
+	if (!uev_handler)
 		return -ENOSYS;
-	}
-	ret = (*lttng_uevent_handler)(file, ubuf, count, fpos);
-	read_unlock(&uevent_rwlock);
-	return ret;
+
+	return uev_handler->write(file, ubuf, count, fpos);
 }
 
 static const struct file_operations lttng_fops = {
