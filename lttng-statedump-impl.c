@@ -46,6 +46,7 @@
 #include <linux/wait.h>
 #include <linux/mutex.h>
 #include <linux/device.h>
+#include <linux/net.h>
 
 #include "lttng-events.h"
 #include "lttng-tracer.h"
