@@ -27,14 +27,9 @@
 #include "../instrumentation/events/lttng-module/uevent.h"
 DEFINE_TRACE(lttng_uevent);
 
-#define LTTNG_UEVENT_SIZE 1024
-
 ssize_t uevent_write_handler(struct file *file, const char __user *ubuf,
 		size_t count, loff_t *fpos)
 {
-	if (count > LTTNG_UEVENT_SIZE)
-		count = LTTNG_UEVENT_SIZE;
-
 	trace_lttng_uevent(ubuf, count);
 	return count;
 }
