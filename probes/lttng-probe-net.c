@@ -1,5 +1,5 @@
 /*
- * probes/lttng-probe-uevent.c
+ * probes/lttng-probe-net.c
  *
  * Expose kernel tracer to user-space through /proc/lttng
  *

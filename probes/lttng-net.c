@@ -20,6 +20,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include <linux/kprobes.h>
+#include <linux/kallsyms.h>
 #include <linux/module.h>
 #include "../lttng-abi.h"
 
@@ -30,14 +32,13 @@ DEFINE_TRACE(lttng_net);
 
 static int __init lttng_probe_net_init(void)
 {
-	trace_lttng_net(1);
+
 	printk("lttng_probe_net loaded\n");
 	return 0;
 }
 
 static void __exit lttng_probe_net_exit(void)
 {
-	trace_lttng_net(0);
 	printk("lttng_probe_net unloaded\n");
 	return;
 }
@@ -46,5 +47,5 @@ module_init(lttng_probe_net_init);
 module_exit(lttng_probe_net_exit);
 
 MODULE_LICENSE("GPL and additional rights");
-MODULE_AUTHOR("Mathieu Desnoyers <mathieu.desnoyers@efficios.com>");
-MODULE_DESCRIPTION("LTTng kernel event from user-space");
+MODULE_AUTHOR("Francis Giraldeau <francis.giraldeau@gmail.com>");
+MODULE_DESCRIPTION("LTTng network tracer");
