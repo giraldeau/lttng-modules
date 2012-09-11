@@ -7,6 +7,9 @@
 #include <linux/tracepoint.h>
 #include <linux/nsproxy.h>
 #include <linux/pid_namespace.h>
+#include <linux/utsname.h>
+
+#define LTTNG_HOSTNAME_LEN	(__NEW_UTS_LEN + 1)
 
 TRACE_EVENT(lttng_statedump_start,
 	TP_PROTO(struct lttng_session *session),
@@ -32,8 +35,9 @@ TRACE_EVENT(lttng_statedump_process_state,
 	TP_PROTO(struct lttng_session *session,
 		struct task_struct *p,
 		int type, int mode, int submode, int status,
-		struct pid_namespace *pid_ns),
-	TP_ARGS(session, p, type, mode, submode, status, pid_ns),
+		struct pid_namespace *pid_ns,
+		char *ns_hostname),
+	TP_ARGS(session, p, type, mode, submode, status, pid_ns, ns_hostname),
 	TP_STRUCT__entry(
 		__field(pid_t, tid)
 		__field(pid_t, vtid)
@@ -42,6 +46,7 @@ TRACE_EVENT(lttng_statedump_process_state,
 		__field(pid_t, ppid)
 		__field(pid_t, vppid)
 		__array_text(char, name, TASK_COMM_LEN)
+		__array_text(char, hostname, LTTNG_HOSTNAME_LEN)
 		__field(int, type)
 		__field(int, mode)
 		__field(int, submode)
@@ -74,6 +79,7 @@ TRACE_EVENT(lttng_statedump_process_state,
 				ret;
 			}))
 		tp_memcpy(name, p->comm, TASK_COMM_LEN)
+		tp_memcpy(hostname, ns_hostname, LTTNG_HOSTNAME_LEN)
 		tp_assign(type, type)
 		tp_assign(mode, mode)
 		tp_assign(submode, submode)

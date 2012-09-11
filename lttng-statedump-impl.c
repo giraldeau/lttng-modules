@@ -283,19 +283,26 @@ void lttng_statedump_process_ns(struct lttng_session *session,
 {
 	struct nsproxy *proxy;
 	struct pid_namespace *pid_ns;
+	struct uts_namespace *uts_ns;
+	char *hostname;
 
 	rcu_read_lock();
 	proxy = task_nsproxy(p);
 	if (proxy) {
 		pid_ns = proxy->pid_ns;
+		uts_ns = proxy->uts_ns;
 		do {
+			if (uts_ns)
+				hostname = uts_ns->name.nodename;
+			else
+				hostname = NULL;
 			trace_lttng_statedump_process_state(session,
-				p, type, mode, submode, status, pid_ns);
+				p, type, mode, submode, status, pid_ns, hostname);
 			pid_ns = pid_ns->parent;
 		} while (pid_ns);
 	} else {
 		trace_lttng_statedump_process_state(session,
-			p, type, mode, submode, status, NULL);
+			p, type, mode, submode, status, NULL, NULL);
 	}
 	rcu_read_unlock();
 }
