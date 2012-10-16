@@ -98,4 +98,37 @@ long lib_ring_buffer_compat_ioctl(struct file *filp, unsigned int cmd,
 /* flush the current sub-buffer */
 #define RING_BUFFER_FLUSH			_IO(0xF6, 0x0C)
 
+#ifdef CONFIG_COMPAT
+/* Get a snapshot of the current ring buffer producer and consumer positions */
+#define RING_BUFFER_COMPAT_SNAPSHOT		RING_BUFFER_SNAPSHOT
+/* Get the consumer position (iteration start) */
+#define RING_BUFFER_COMPAT_SNAPSHOT_GET_CONSUMED \
+	_IOR(0xF6, 0x01, compat_ulong_t)
+/* Get the producer position (iteration end) */
+#define RING_BUFFER_COMPAT_SNAPSHOT_GET_PRODUCED \
+	_IOR(0xF6, 0x02, compat_ulong_t)
+/* Get exclusive read access to the specified sub-buffer position */
+#define RING_BUFFER_COMPAT_GET_SUBBUF		_IOW(0xF6, 0x03, compat_ulong_t)
+/* Release exclusive sub-buffer access */
+#define RING_BUFFER_COMPAT_PUT_SUBBUF		RING_BUFFER_PUT_SUBBUF
+
+/* Get exclusive read access to the next sub-buffer that can be read. */
+#define RING_BUFFER_COMPAT_GET_NEXT_SUBBUF	RING_BUFFER_GET_NEXT_SUBBUF
+/* Release exclusive sub-buffer access, move consumer forward. */
+#define RING_BUFFER_COMPAT_PUT_NEXT_SUBBUF	RING_BUFFER_PUT_NEXT_SUBBUF
+/* returns the size of the current sub-buffer, without padding (for mmap). */
+#define RING_BUFFER_COMPAT_GET_SUBBUF_SIZE	_IOR(0xF6, 0x07, compat_ulong_t)
+/* returns the size of the current sub-buffer, with padding (for splice). */
+#define RING_BUFFER_COMPAT_GET_PADDED_SUBBUF_SIZE \
+	_IOR(0xF6, 0x08, compat_ulong_t)
+/* returns the maximum size for sub-buffers. */
+#define RING_BUFFER_COMPAT_GET_MAX_SUBBUF_SIZE	_IOR(0xF6, 0x09, compat_ulong_t)
+/* returns the length to mmap. */
+#define RING_BUFFER_COMPAT_GET_MMAP_LEN		_IOR(0xF6, 0x0A, compat_ulong_t)
+/* returns the offset of the subbuffer belonging to the mmap reader. */
+#define RING_BUFFER_COMPAT_GET_MMAP_READ_OFFSET	_IOR(0xF6, 0x0B, compat_ulong_t)
+/* flush the current sub-buffer */
+#define RING_BUFFER_COMPAT_FLUSH		RING_BUFFER_FLUSH
+#endif /* CONFIG_COMPAT */
+
 #endif /* _LIB_RING_BUFFER_VFS_H */
