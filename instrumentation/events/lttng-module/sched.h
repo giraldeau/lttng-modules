@@ -90,6 +90,7 @@ DECLARE_EVENT_CLASS(sched_wakeup_template,
 		__field(	int,	prio			)
 		__field(	int,	success			)
 		__field(	int,	target_cpu		)
+		__field(unsigned long,	retaddr		)
 	),
 
 	TP_fast_assign(
@@ -98,11 +99,12 @@ DECLARE_EVENT_CLASS(sched_wakeup_template,
 		tp_assign(prio, p->prio)
 		tp_assign(success, success)
 		tp_assign(target_cpu, task_cpu(p))
+		tp_assign(retaddr, (unsigned long)__builtin_return_address(0))
 	),
 
-	TP_printk("comm=%s tid=%d prio=%d success=%d target_cpu=%03d",
+	TP_printk("comm=%s tid=%d prio=%d success=%d target_cpu=%03d retaddr=%x",
 		  __entry->comm, __entry->tid, __entry->prio,
-		  __entry->success, __entry->target_cpu)
+		  __entry->success, __entry->target_cpu, __entry->retaddr)
 )
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
