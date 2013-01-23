@@ -30,6 +30,40 @@
 
 #endif
 
+/*
+TRACE_EVENT(kvm_entry,
+	TP_PROTO(unsigned int vcpu_id),
+	TP_ARGS(vcpu_id),
+	TP_STRUCT__entry(
+		__field(	unsigned int,	vcpu_id		)
+	),
+	TP_fast_assign(
+		tp_assign(vcpu_id, vcpu_id)
+	),
+	TP_printk("vcpu %u", __entry->vcpu_id)
+)
+*/
+
+TRACE_EVENT(kvm_ppc_instr,
+	TP_PROTO(unsigned int inst, unsigned long _pc, unsigned int emulate),
+	TP_ARGS(inst, _pc, emulate),
+
+	TP_STRUCT__entry(
+		__field(	unsigned int,	inst		)
+		__field(	unsigned long,	pc		)
+		__field(	unsigned int,	emulate		)
+	),
+
+	TP_fast_assign(
+		tp_assign(inst, inst)
+		tp_assign(pc, _pc)
+		tp_assign(emulate, emulate)
+	),
+
+	TP_printk("inst %u pc 0x%lx emulate %u\n",
+		  __entry->inst, __entry->pc, __entry->emulate)
+)
+
 TRACE_EVENT(kvm_userspace_exit,
 	    TP_PROTO(__u32 reason, int errno),
 	    TP_ARGS(reason, errno),
