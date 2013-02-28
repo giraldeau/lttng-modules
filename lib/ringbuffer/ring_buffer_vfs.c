@@ -71,6 +71,7 @@ release_read:
 	lib_ring_buffer_release_read(buf);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(lib_ring_buffer_open);
 
 /**
  *	lib_ring_buffer_release - ring buffer release file operation
@@ -87,6 +88,7 @@ int lib_ring_buffer_release(struct inode *inode, struct file *file)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(lib_ring_buffer_release);
 
 /**
  *	lib_ring_buffer_poll - ring buffer poll file operation
@@ -148,6 +150,7 @@ retry:
 	}
 	return mask;
 }
+EXPORT_SYMBOL_GPL(lib_ring_buffer_poll);
 
 /**
  *	lib_ring_buffer_ioctl - control ring buffer reader synchronization
@@ -267,6 +270,7 @@ long lib_ring_buffer_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 		return -ENOIOCTLCMD;
 	}
 }
+EXPORT_SYMBOL_GPL(lib_ring_buffer_ioctl);
 
 #ifdef CONFIG_COMPAT
 long lib_ring_buffer_compat_ioctl(struct file *filp, unsigned int cmd,
@@ -380,6 +384,7 @@ long lib_ring_buffer_compat_ioctl(struct file *filp, unsigned int cmd,
 		return -ENOIOCTLCMD;
 	}
 }
+EXPORT_SYMBOL_GPL(lib_ring_buffer_compat_ioctl);
 #endif
 
 const struct file_operations lib_ring_buffer_file_operations = {

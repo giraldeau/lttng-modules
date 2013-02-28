@@ -45,6 +45,8 @@
 #include <linux/slab.h>
 #include "wrapper/vmalloc.h"	/* for wrapper_vmalloc_sync_all() */
 #include "wrapper/ringbuffer/vfs.h"
+#include "wrapper/ringbuffer/backend.h"
+#include "wrapper/ringbuffer/frontend.h"
 #include "wrapper/poll.h"
 #include "lttng-abi.h"
 #include "lttng-abi-old.h"
@@ -67,11 +69,6 @@ static const struct file_operations lttng_event_fops;
  * Teardown management: opened file descriptors keep a refcount on the module,
  * so it can only exit when all file descriptors are closed.
  */
-
-enum channel_type {
-	PER_CPU_CHANNEL,
-	METADATA_CHANNEL,
-};
 
 static
 int lttng_abi_create_session(void)
@@ -362,7 +359,8 @@ int lttng_abi_create_channel(struct file *session_file,
 				  chan_param->subbuf_size,
 				  chan_param->num_subbuf,
 				  chan_param->switch_timer_interval,
-				  chan_param->read_timer_interval);
+				  chan_param->read_timer_interval,
+				  channel_type);
 	if (!chan) {
 		ret = -EINVAL;
 		goto chan_error;
@@ -370,9 +368,6 @@ int lttng_abi_create_channel(struct file *session_file,
 	chan->file = chan_file;
 	chan_file->private_data = chan;
 	fd_install(chan_fd, chan_file);
-	if (channel_type == METADATA_CHANNEL) {
-		session->metadata = chan;
-	}
 
 	/* The channel created holds a reference on the session */
 	atomic_long_inc(&session_file->f_count);
@@ -514,6 +509,133 @@ static const struct file_operations lttng_session_fops = {
 #endif
 };
 
+/**
+ *	lttng_ring_buffer_poll - LTTng ring buffer poll file operation
+ *	@filp: the file
+ *	@wait: poll table
+ *
+ *	Handles the poll operations for the metadata channels or calls
+ *	the lib_ring_buffer_poll for per-cpu channels.
+ */
+static
+unsigned int lttng_ring_buffer_poll(struct file *filp, poll_table *wait)
+{
+	struct lib_ring_buffer *buf = filp->private_data;
+	struct channel *chan = buf->backend.chan;
+	struct lttng_channel *lttng_chan = channel_get_private(chan);
+	const struct lib_ring_buffer_config *config = &chan->backend.config;
+	int finalized, disabled;
+	unsigned int mask = 0;
+
+	if (lttng_chan->channel_type != METADATA_CHANNEL)
+		return lib_ring_buffer_poll(filp, wait);
+
+	if (filp->f_mode & FMODE_READ) {
+		poll_wait_set_exclusive(wait);
+		poll_wait(filp, &buf->read_wait, wait);
+
+		finalized = lib_ring_buffer_is_finalized(config, buf);
+		disabled = lib_ring_buffer_channel_is_disabled(chan);
+
+		/*
+		 * lib_ring_buffer_is_finalized() contains a smp_rmb() ordering
+		 * finalized load before offsets loads.
+		 */
+		WARN_ON(atomic_long_read(&buf->active_readers) != 1);
+
+		if (disabled)
+			return POLLERR;
+
+		if (finalized)
+			return POLLHUP;
+
+		if (lttng_chan->session->metadata_written >
+				lttng_chan->metadata_cache_read)
+			return POLLIN;
+	}
+
+	return mask;
+}
+
+static
+long lttng_ring_buffer_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	switch (cmd) {
+	case RING_BUFFER_GET_SUBBUF:
+	{
+		struct lib_ring_buffer *buf = filp->private_data;
+		struct channel *chan = buf->backend.chan;
+		struct lttng_channel *lttng_chan = channel_get_private(chan);
+		int ret;
+
+		if (lttng_chan->channel_type != METADATA_CHANNEL)
+			break;
+
+		ret = lttng_metadata_output_channel(lttng_chan->session,
+				lttng_chan);
+		if (ret < 0) {
+			printk(KERN_ERR "write metadata on get_subbuf\n");
+			lttng_chan->ops->channel_destroy(lttng_chan->chan);
+			goto err;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	return lib_ring_buffer_ioctl(filp, cmd, arg);
+
+err:
+	return -EIO;
+}
+
+static
+long lttng_ring_buffer_compat_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	switch (cmd) {
+	case RING_BUFFER_GET_SUBBUF:
+	{
+		struct lib_ring_buffer *buf = filp->private_data;
+		struct channel *chan = buf->backend.chan;
+		struct lttng_channel *lttng_chan = channel_get_private(chan);
+		int ret;
+
+		if (lttng_chan->channel_type != METADATA_CHANNEL)
+			break;
+
+		ret = lttng_metadata_output_channel(lttng_chan->session,
+				lttng_chan);
+		if (ret < 0) {
+			printk(KERN_ERR "write metadata on get_subbuf\n");
+			lttng_chan->ops->channel_destroy(lttng_chan->chan);
+			goto err;
+		}
+		break;
+	}
+	default:
+		break;
+	}
+	return lib_ring_buffer_compat_ioctl(filp, cmd, arg);
+
+err:
+	return -EIO;
+}
+
+
+const struct file_operations lttng_ring_buffer_file_operations = {
+	.owner = THIS_MODULE,
+	.open = lib_ring_buffer_open,
+	.release = lib_ring_buffer_release,
+	.poll = lttng_ring_buffer_poll,
+	.splice_read = lib_ring_buffer_splice_read,
+	.mmap = lib_ring_buffer_mmap,
+	.unlocked_ioctl = lttng_ring_buffer_ioctl,
+	.llseek = lib_ring_buffer_no_llseek,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = lttng_ring_buffer_compat_ioctl,
+#endif
+};
+
 static
 int lttng_abi_open_stream(struct file *channel_file)
 {
@@ -532,7 +654,7 @@ int lttng_abi_open_stream(struct file *channel_file)
 		goto fd_error;
 	}
 	stream_file = anon_inode_getfile("[lttng_stream]",
-					 &lib_ring_buffer_file_operations,
+					 &lttng_ring_buffer_file_operations,
 					 buf, O_RDWR);
 	if (IS_ERR(stream_file)) {
 		ret = PTR_ERR(stream_file);

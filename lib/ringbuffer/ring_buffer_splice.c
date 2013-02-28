@@ -41,6 +41,7 @@ loff_t lib_ring_buffer_no_llseek(struct file *file, loff_t offset, int origin)
 {
 	return -ESPIPE;
 }
+EXPORT_SYMBOL_GPL(lib_ring_buffer_no_llseek);
 
 /*
  * Release pages from the buffer so splice pipe_to_file can move them.

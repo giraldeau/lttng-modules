@@ -58,6 +58,11 @@ enum lttng_string_encodings {
 	NR_STRING_ENCODINGS,
 };
 
+enum channel_type {
+	PER_CPU_CHANNEL,
+	METADATA_CHANNEL,
+};
+
 struct lttng_enum_entry {
 	unsigned long long start, end;	/* start and end are inclusive */
 	const char *string;
@@ -264,20 +269,29 @@ struct lttng_channel {
 	struct lttng_event *sc_compat_unknown;
 	struct lttng_event *sc_exit;	/* for syscall exit */
 	int header_type;		/* 0: unset, 1: compact, 2: large */
+	enum channel_type channel_type;
 	unsigned int metadata_dumped:1;
+
+	/* For metadata channels only */
+	unsigned int metadata_cache_read;	/* Bytes read from the cache */
 };
 
 struct lttng_session {
 	int active;			/* Is trace session active ? */
 	int been_active;		/* Has trace session been active ? */
 	struct file *file;		/* File associated to session */
-	struct lttng_channel *metadata;	/* Metadata channel */
+	struct list_head metadata_channels; /* Metadata channels */
 	struct list_head chan;		/* Channel list head */
 	struct list_head events;	/* Event list head */
 	struct list_head list;		/* Session list */
 	unsigned int free_chan_id;	/* Next chan ID to allocate */
 	uuid_le uuid;			/* Trace session unique ID */
 	unsigned int metadata_dumped:1;
+
+	/* Metadata cache handling */
+	char *metadata_cache;		/* Metadata cache */
+	unsigned int metadata_cache_alloc; /* Metadata allocated size (bytes) */
+	unsigned int metadata_written;	/* Number of bytes written in metadata cache */
 };
 
 struct lttng_session *lttng_session_create(void);
@@ -290,7 +304,8 @@ struct lttng_channel *lttng_channel_create(struct lttng_session *session,
 				       void *buf_addr,
 				       size_t subbuf_size, size_t num_subbuf,
 				       unsigned int switch_timer_interval,
-				       unsigned int read_timer_interval);
+				       unsigned int read_timer_interval,
+				       enum channel_type channel_type);
 struct lttng_channel *lttng_global_channel_create(struct lttng_session *session,
 				       int overwrite, void *buf_addr,
 				       size_t subbuf_size, size_t num_subbuf,
@@ -326,6 +341,9 @@ const struct lttng_event_desc *lttng_event_get(const char *name);
 void lttng_event_put(const struct lttng_event_desc *desc);
 int lttng_probes_init(void);
 void lttng_probes_exit(void);
+
+int lttng_metadata_output_channel(struct lttng_session *session,
+		struct lttng_channel *chan);
 
 #if defined(CONFIG_HAVE_SYSCALL_TRACEPOINTS)
 int lttng_syscalls_register(struct lttng_channel *chan, void *filter);
