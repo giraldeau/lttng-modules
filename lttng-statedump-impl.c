@@ -217,6 +217,7 @@ int lttng_enumerate_network_ip_interface(struct lttng_session *session)
 static
 int lttng_dump_one_fd(const void *p, struct file *file, unsigned int fd)
 {
+	int err;
 	const struct lttng_fd_ctx *ctx = p;
 	const char *s = d_path(&file->f_path, ctx->page, PAGE_SIZE);
 	unsigned int flags = file->f_flags;
