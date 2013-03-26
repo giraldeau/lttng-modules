@@ -153,6 +153,7 @@ static
 int lttng_dump_one_fd(const void *p, struct file *file, unsigned int fd)
 {
 	int err;
+	struct socket *sock;
 	const struct lttng_fd_ctx *ctx = p;
 	const char *s = d_path(&file->f_path, ctx->page, PAGE_SIZE);
 
@@ -168,7 +169,7 @@ int lttng_dump_one_fd(const void *p, struct file *file, unsigned int fd)
 	}
 	trace_lttng_statedump_file_descriptor(ctx->session, ctx->p, fd, s);
 	// FIXME: sock_from_file is exported since kernel >= 3.6-rc1
-	struct socket *sock = sock_from_file(file, &err);
+	sock = sock_from_file(file, &err);
 	if (sock) {
 		trace_lttng_statedump_inet_sock(ctx->session, ctx->p, fd, sock->sk);
 	}
