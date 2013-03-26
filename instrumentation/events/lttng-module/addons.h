@@ -110,13 +110,22 @@ TRACE_EVENT(inet_sock_local_in,
 		__field_hex(struct sock *, sk)
 		__field_network_hex(uint32_t, seq)
 		__field_network_hex(uint32_t, ack_seq)
+		__field_network_hex(uint16_t, check)
+		__field_network_hex(uint16_t, window)
+		__field_network_hex(uint16_t, flags)
 	),
 	TP_fast_assign(
 		tp_assign(sk, sk)
 		tp_assign(seq, tcph->seq)
 		tp_assign(ack_seq, tcph->ack_seq)
+		tp_assign(check, tcph->check)
+		tp_assign(window, tcph->window)
+		tp_assign(flags, (tcph->res1 << 12) + (tcph->doff << 8) + (tcph->fin << 7) +
+				(tcph->syn << 6) + (tcph->rst << 5) + (tcph->psh << 4) + (tcph->ack << 3) +
+				(tcph->urg << 2) + (tcph->ece << 1) + (tcph->cwr) )
 	),
-	TP_printk("%p %x %x", __entry->sk, __entry->seq, __entry->ack_seq)
+	TP_printk("%p %x %x %x %x %x", __entry->sk, __entry->seq, __entry->ack_seq,
+			__entry->check, __entry->window, __entry->flags)
 )
 
 TRACE_EVENT(inet_sock_local_out,
@@ -126,13 +135,22 @@ TRACE_EVENT(inet_sock_local_out,
 		__field_hex(struct sock *, sk)
 		__field_network_hex(uint32_t, seq)
 		__field_network_hex(uint32_t, ack_seq)
+		__field_network_hex(uint16_t, check)
+		__field_network_hex(uint16_t, window)
+		__field_network_hex(uint16_t, flags)
 	),
 	TP_fast_assign(
 		tp_assign(sk, sk)
 		tp_assign(seq, tcph->seq)
 		tp_assign(ack_seq, tcph->ack_seq)
+		tp_assign(check, tcph->check)
+		tp_assign(window, tcph->window)
+		tp_assign(flags, (tcph->res1 << 12) + (tcph->doff << 8) + (tcph->fin << 7) +
+				(tcph->syn << 6) + (tcph->rst << 5) + (tcph->psh << 4) + (tcph->ack << 3) +
+				(tcph->urg << 2) + (tcph->ece << 1) + (tcph->cwr) )
 	),
-	TP_printk("%p %x %x", __entry->sk, __entry->seq, __entry->ack_seq)
+	TP_printk("%p %x %x %x %x %x", __entry->sk, __entry->seq, __entry->ack_seq,
+			__entry->check, __entry->window, __entry->flags)
 )
 
 #endif /* LTTNG_NET_H_ */
