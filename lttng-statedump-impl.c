@@ -214,6 +214,22 @@ int lttng_enumerate_network_ip_interface(struct lttng_session *session)
 }
 #endif /* CONFIG_INET */
 
+/*
+ * Prior to version 3.6, the function sock_from_file was not exported.
+ * Copy the function as a work around.
+ */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(3,6,0))
+extern const struct file_operations socket_file_ops;
+struct socket *sock_from_file(struct file *file, int *err)
+{
+	if (file->f_op == &socket_file_ops)
+		return file->private_data;	/* set in sock_map_fd */
+
+	*err = -ENOTSOCK;
+	return NULL;
+}
+#endif
+
 static
 int lttng_dump_one_fd(const void *p, struct file *file, unsigned int fd)
 {
