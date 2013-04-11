@@ -10,27 +10,6 @@
 
 #ifndef _TRACE_WRITEBACK_DEF_
 #define _TRACE_WRITEBACK_DEF_
-/* Have to duplicate it here from fs/fs-writeback.c */
-struct wb_writeback_work {
-	long nr_pages;
-	struct super_block *sb;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
-	unsigned long *older_than_this;
-#endif
-	enum writeback_sync_modes sync_mode;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
-	unsigned int tagged_writepages:1;
-#endif
-	unsigned int for_kupdate:1;
-	unsigned int range_cyclic:1;
-	unsigned int for_background:1;
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-	enum wb_reason reason;		/* why was writeback initiated? */
-#endif
-
-	struct list_head list;		/* pending work list */
-	struct completion *done;	/* set if the caller waits */
-};
 static inline struct backing_dev_info *inode_to_bdi(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
@@ -72,53 +51,14 @@ DECLARE_EVENT_CLASS(writeback_work_class,
 	TP_ARGS(bdi, work),
 	TP_STRUCT__entry(
 		__array(char, name, 32)
-		__field(long, nr_pages)
-		__field(dev_t, sb_dev)
-		__field(int, sync_mode)
-		__field(int, for_kupdate)
-		__field(int, range_cyclic)
-		__field(int, for_background)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-		__field(int, reason)
-#endif
 	),
 	TP_fast_assign(
 		tp_memcpy(name, dev_name(bdi->dev ? bdi->dev :
 				default_backing_dev_info.dev), 32)
-		tp_assign(nr_pages, work->nr_pages)
-		tp_assign(sb_dev, work->sb ? work->sb->s_dev : 0)
-		tp_assign(sync_mode, work->sync_mode)
-		tp_assign(for_kupdate, work->for_kupdate)
-		tp_assign(range_cyclic, work->range_cyclic)
-		tp_assign(for_background, work->for_background)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-		tp_assign(reason, work->reason)
-#endif
 	),
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-	TP_printk("bdi %s: sb_dev %d:%d nr_pages=%ld sync_mode=%d "
-		  "kupdate=%d range_cyclic=%d background=%d reason=%s",
-		  __entry->name,
-		  MAJOR(__entry->sb_dev), MINOR(__entry->sb_dev),
-		  __entry->nr_pages,
-		  __entry->sync_mode,
-		  __entry->for_kupdate,
-		  __entry->range_cyclic,
-		  __entry->for_background,
-		  __print_symbolic(__entry->reason, WB_WORK_REASON)
+	TP_printk("bdi %s",
+		  __entry->name
 	)
-#else
-	TP_printk("bdi %s: sb_dev %d:%d nr_pages=%ld sync_mode=%d "
-		  "kupdate=%d range_cyclic=%d background=%d",
-		  __entry->name,
-		  MAJOR(__entry->sb_dev), MINOR(__entry->sb_dev),
-		  __entry->nr_pages,
-		  __entry->sync_mode,
-		  __entry->for_kupdate,
-		  __entry->range_cyclic,
-		  __entry->for_background
-	)
-#endif
 )
 #define DEFINE_WRITEBACK_WORK_EVENT(name) \
 DEFINE_EVENT(writeback_work_class, name, \
@@ -163,6 +103,11 @@ DEFINE_EVENT(writeback_class, name, \
 	TP_PROTO(struct backing_dev_info *bdi), \
 	TP_ARGS(bdi))
 
+#define DEFINE_WRITEBACK_EVENT_MAP(name, map) \
+DEFINE_EVENT_MAP(writeback_class, name, map, \
+	TP_PROTO(struct backing_dev_info *bdi), \
+	TP_ARGS(bdi))
+
 DEFINE_WRITEBACK_EVENT(writeback_nowork)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38))
 DEFINE_WRITEBACK_EVENT(writeback_wake_background)
@@ -174,10 +119,12 @@ DEFINE_WRITEBACK_EVENT(writeback_bdi_unregister)
 DEFINE_WRITEBACK_EVENT(writeback_thread_start)
 DEFINE_WRITEBACK_EVENT(writeback_thread_stop)
 #if (LTTNG_KERNEL_RANGE(3,1,0, 3,2,0))
-DEFINE_WRITEBACK_EVENT(balance_dirty_start)
-DEFINE_WRITEBACK_EVENT(balance_dirty_wait)
+DEFINE_WRITEBACK_EVENT_MAP(balance_dirty_start, writeback_balance_dirty_start)
+DEFINE_WRITEBACK_EVENT_MAP(balance_dirty_wait, writeback_balance_dirty_wait)
 
-TRACE_EVENT(balance_dirty_written,
+TRACE_EVENT_MAP(balance_dirty_written,
+
+	writeback_balance_dirty_written,
 
 	TP_PROTO(struct backing_dev_info *bdi, int written),
 
@@ -200,7 +147,7 @@ TRACE_EVENT(balance_dirty_written,
 )
 #endif
 
-DECLARE_EVENT_CLASS(wbc_class,
+DECLARE_EVENT_CLASS(writeback_wbc_class,
 	TP_PROTO(struct writeback_control *wbc, struct backing_dev_info *bdi),
 	TP_ARGS(wbc, bdi),
 	TP_STRUCT__entry(
@@ -261,19 +208,20 @@ DECLARE_EVENT_CLASS(wbc_class,
 		__entry->range_end)
 )
 
-#define DEFINE_WBC_EVENT(name) \
-DEFINE_EVENT(wbc_class, name, \
+#undef DEFINE_WBC_EVENT
+#define DEFINE_WBC_EVENT(name, map) \
+DEFINE_EVENT_MAP(writeback_wbc_class, name, map, \
 	TP_PROTO(struct writeback_control *wbc, struct backing_dev_info *bdi), \
 	TP_ARGS(wbc, bdi))
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(3,1,0))
-DEFINE_WBC_EVENT(wbc_writeback_start)
-DEFINE_WBC_EVENT(wbc_writeback_written)
-DEFINE_WBC_EVENT(wbc_writeback_wait)
-DEFINE_WBC_EVENT(wbc_balance_dirty_start)
-DEFINE_WBC_EVENT(wbc_balance_dirty_written)
-DEFINE_WBC_EVENT(wbc_balance_dirty_wait)
+DEFINE_WBC_EVENT(wbc_writeback_start, writeback_wbc_writeback_start)
+DEFINE_WBC_EVENT(wbc_writeback_written, writeback_wbc_writeback_written)
+DEFINE_WBC_EVENT(wbc_writeback_wait, writeback_wbc_writeback_wait)
+DEFINE_WBC_EVENT(wbc_balance_dirty_start, writeback_wbc_balance_dirty_start)
+DEFINE_WBC_EVENT(wbc_balance_dirty_written, writeback_wbc_balance_dirty_written)
+DEFINE_WBC_EVENT(wbc_balance_dirty_wait, writeback_wbc_balance_dirty_wait)
 #endif
-DEFINE_WBC_EVENT(wbc_writepage)
+DEFINE_WBC_EVENT(wbc_writepage, writeback_wbc_writepage)
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,1,0))
 TRACE_EVENT(writeback_queue_io,
@@ -291,37 +239,27 @@ TRACE_EVENT(writeback_queue_io,
 #endif
 	TP_STRUCT__entry(
 		__array(char,		name, 32)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+#else
 		__field(unsigned long,	older)
 		__field(long,		age)
-		__field(int,		moved)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-		__field(int,		reason)
 #endif
+		__field(int,		moved)
 	),
 	TP_fast_assign(
 		tp_memcpy(name, dev_name(wb->bdi->dev), 32)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-		tp_assign(older,
-			work->older_than_this ? *(work->older_than_this) : 0)
-		tp_assign(age, work->older_than_this ?
-			(jiffies - *(work->older_than_this)) * 1000 / HZ : -1)
 #else
 		tp_assign(older, older_than_this ?  *older_than_this : 0)
 		tp_assign(age, older_than_this ?
 			(jiffies - *older_than_this) * 1000 / HZ : -1)
 #endif
 		tp_assign(moved, moved)
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-		tp_assign(reason, work->reason)
-#endif
 	),
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
-	TP_printk("bdi %s: older=%lu age=%ld enqueue=%d reason=%s",
+	TP_printk("bdi %s: enqueue=%d",
 		__entry->name,
-		__entry->older,	/* older_than_this in jiffies */
-		__entry->age,	/* older_than_this in relative milliseconds */
 		__entry->moved,
-		__print_symbolic(__entry->reason, WB_WORK_REASON)
 	)
 #else
 	TP_printk("bdi %s: older=%lu age=%ld enqueue=%d",
@@ -333,7 +271,9 @@ TRACE_EVENT(writeback_queue_io,
 #endif
 )
 
-TRACE_EVENT(global_dirty_state,
+TRACE_EVENT_MAP(global_dirty_state,
+
+	writeback_global_dirty_state,
 
 	TP_PROTO(unsigned long background_thresh,
 		 unsigned long dirty_thresh
@@ -384,7 +324,9 @@ TRACE_EVENT(global_dirty_state,
 
 #define KBps(x)			((x) << (PAGE_SHIFT - 10))
 
-TRACE_EVENT(bdi_dirty_ratelimit,
+TRACE_EVENT_MAP(bdi_dirty_ratelimit,
+
+	writeback_bdi_dirty_ratelimit,
 
 	TP_PROTO(struct backing_dev_info *bdi,
 		 unsigned long dirty_rate,
@@ -427,7 +369,9 @@ TRACE_EVENT(bdi_dirty_ratelimit,
 	)
 )
 
-TRACE_EVENT(balance_dirty_pages,
+TRACE_EVENT_MAP(balance_dirty_pages,
+
+	writeback_balance_dirty_pages,
 
 	TP_PROTO(struct backing_dev_info *bdi,
 		 unsigned long thresh,
