@@ -232,7 +232,6 @@ struct lttng_channel *lttng_channel_create(struct lttng_session *session,
 {
 	struct lttng_channel *chan;
 	struct lttng_transport *transport = NULL;
-	int ret;
 
 	mutex_lock(&sessions_mutex);
 	if (session->been_active && channel_type == PER_CPU_CHANNEL)
@@ -267,19 +266,6 @@ struct lttng_channel *lttng_channel_create(struct lttng_session *session,
 	chan->transport = transport;
 	chan->channel_type = channel_type;
 
-	if (channel_type == METADATA_CHANNEL) {
-		/*
-		 * If session already active, write in the new metadata
-		 * channel the metadata already written in the cache
-		 */
-		if (ACCESS_ONCE(session->been_active)) {
-			ret = lttng_metadata_output_channel(session, chan);
-			if (ret < 0) {
-				printk(KERN_ERR "write metadata on create\n");
-				goto create_error;
-			}
-		}
-	}
 	list_add(&chan->list, &session->chan);
 
 	mutex_unlock(&sessions_mutex);
@@ -519,42 +505,39 @@ int lttng_metadata_output_channel(struct lttng_session *session,
 {
 	struct lib_ring_buffer_ctx ctx;
 	int ret = 0, waitret;
-	size_t len, reserve_len, pos;
+	size_t len, reserve_len;
 
 	len = session->metadata_written - chan->metadata_cache_read;
-	for (pos = 0; pos < len; pos += reserve_len) {
-		reserve_len = min_t(size_t,
-				chan->ops->packet_avail_size(chan->chan),
-				len - pos);
-		lib_ring_buffer_ctx_init(&ctx, chan->chan, NULL, reserve_len,
-				sizeof(char), -1);
-		/*
-		 * We don't care about metadata buffer's records lost
-		 * count, because we always retry here. Report error if
-		 * we need to bail out after timeout or being
-		 * interrupted.
-		 */
-		waitret = wait_event_interruptible_timeout(
-				*chan->ops->get_writer_buf_wait_queue(chan->chan, -1),
-				({
-				 ret = chan->ops->event_reserve(&ctx, 0);
-				 ret != -ENOBUFS || !ret;
-				 }),
-				msecs_to_jiffies(LTTNG_METADATA_TIMEOUT_MSEC));
-		if (!waitret || waitret == -ERESTARTSYS || ret) {
-			printk(KERN_WARNING "LTTng: Failure to write metadata to buffers (%s)\n",
-					waitret == -ERESTARTSYS ? "interrupted" :
-					(ret == -ENOBUFS ? "timeout" : "I/O error"));
-			if (waitret == -ERESTARTSYS)
-				ret = waitret;
-			goto end;
-		}
-		chan->ops->event_write(&ctx,
-				session->metadata_cache + chan->metadata_cache_read,
-				reserve_len);
-		chan->ops->event_commit(&ctx);
-		chan->metadata_cache_read += reserve_len;
+	reserve_len = min_t(size_t,
+			chan->ops->packet_avail_size(chan->chan),
+			len);
+	lib_ring_buffer_ctx_init(&ctx, chan->chan, NULL, reserve_len,
+			sizeof(char), -1);
+	/*
+	 * We don't care about metadata buffer's records lost
+	 * count, because we always retry here. Report error if
+	 * we need to bail out after being interrupted.
+	 */
+	waitret = wait_event_interruptible(
+			*chan->ops->get_writer_buf_wait_queue(chan->chan, -1),
+			({
+			 ret = chan->ops->event_reserve(&ctx, 0);
+			 ret != -ENOBUFS || !ret;
+			 }));
+	if (waitret) {
+		printk(KERN_WARNING
+				"LTTng: Failure to write metadata to buffers (%s)\n",
+				waitret == -ERESTARTSYS ? "interrupted" :
+				"I/O error");
+		ret = waitret;
+		goto end;
 	}
+	chan->ops->event_write(&ctx,
+			session->metadata_cache + chan->metadata_cache_read,
+			reserve_len);
+	chan->ops->event_commit(&ctx);
+	chan->metadata_cache_read += reserve_len;
+	ret = reserve_len;
 
 end:
 	return ret;

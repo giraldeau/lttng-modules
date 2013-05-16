@@ -562,27 +562,32 @@ long lttng_ring_buffer_ioctl(struct file *filp, unsigned int cmd, unsigned long 
 {
 	switch (cmd) {
 	case RING_BUFFER_GET_SUBBUF:
+	case RING_BUFFER_GET_NEXT_SUBBUF:
 	{
 		struct lib_ring_buffer *buf = filp->private_data;
 		struct channel *chan = buf->backend.chan;
 		struct lttng_channel *lttng_chan = channel_get_private(chan);
 		int ret;
 
+		printk("LA0\n");
 		if (lttng_chan->channel_type != METADATA_CHANNEL)
 			break;
 
+		printk("LA1\n");
 		ret = lttng_metadata_output_channel(lttng_chan->session,
 				lttng_chan);
 		if (ret < 0) {
 			printk(KERN_ERR "write metadata on get_subbuf\n");
-			lttng_chan->ops->channel_destroy(lttng_chan->chan);
 			goto err;
+		} else if (ret > 0) {
+			lib_ring_buffer_switch_slow(buf, SWITCH_ACTIVE);
 		}
 		break;
 	}
 	default:
 		break;
 	}
+	printk("LA2\n");
 	return lib_ring_buffer_ioctl(filp, cmd, arg);
 
 err:
@@ -607,7 +612,6 @@ long lttng_ring_buffer_compat_ioctl(struct file *filp, unsigned int cmd, unsigne
 				lttng_chan);
 		if (ret < 0) {
 			printk(KERN_ERR "write metadata on get_subbuf\n");
-			lttng_chan->ops->channel_destroy(lttng_chan->chan);
 			goto err;
 		}
 		break;
