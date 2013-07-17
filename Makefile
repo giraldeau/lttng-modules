@@ -51,6 +51,7 @@ ifneq ($(KERNELRELEASE),)
                        lttng-context-vtid.o lttng-context-ppid.o \
                        lttng-context-vppid.o lttng-context-cpu-id.o \
                        lttng-context-interruptible.o \
+                       lttng-context-callstack.o \
                        lttng-context-need-reschedule.o lttng-calibrate.o \
                        lttng-context-hostname.o wrapper/random.o \
                        probes/lttng.o wrapper/trace-clock.o \
