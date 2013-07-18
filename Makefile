@@ -20,7 +20,7 @@ lttng-tracer-objs :=  lttng-events.o lttng-abi.o \
 			lttng-context-vpid.o lttng-context-tid.o \
 			lttng-context-vtid.o lttng-context-ppid.o \
 			lttng-context-vppid.o lttng-calibrate.o \
-			lttng-context-hostname.o lttng-context-backtrace.o \
+			lttng-context-hostname.o lttng-context-callstack.o \
 			wrapper/random.o
 
 obj-m += lttng-statedump.o

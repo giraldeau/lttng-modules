@@ -32,7 +32,7 @@
 #define TMPLEN 10
 
 static
-size_t backtrace_get_size(size_t offset)
+size_t callstack_get_size(size_t offset)
 {
 	size_t size = 0;
 
@@ -41,26 +41,26 @@ size_t backtrace_get_size(size_t offset)
 }
 
 static
-void backtrace_record(struct lttng_ctx_field *field,
+void callstack_record(struct lttng_ctx_field *field,
 		 struct lib_ring_buffer_ctx *ctx,
 		 struct lttng_channel *chan)
 {
 	chan->ops->event_write(ctx, "kbt", TMPLEN);
 }
 
-int lttng_add_kernel_backtrace_to_ctx(struct lttng_ctx **ctx)
+int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 {
 	struct lttng_ctx_field *field;
 
 	field = lttng_append_context(ctx);
 	if (!field)
 		return -ENOMEM;
-	if (lttng_find_context(*ctx, "kernel-backtrace")) {
+	if (lttng_find_context(*ctx, "kcallstack")) {
 		lttng_remove_context_field(ctx, field);
-		printk("kernel-backtrace lttng_find_context failed\n");
+		printk("callstack:kernel lttng_find_context failed\n");
 		return -EEXIST;
 	}
-	field->event_field.name = "kernel_backtrace";
+	field->event_field.name = "kcallstack";
 	field->event_field.type.atype = atype_array;
 	field->event_field.type.u.array.elem_type.atype = atype_integer;
 	field->event_field.type.u.array.elem_type.u.basic.integer.size = sizeof(char) * CHAR_BIT;
@@ -71,13 +71,13 @@ int lttng_add_kernel_backtrace_to_ctx(struct lttng_ctx **ctx)
 	field->event_field.type.u.array.elem_type.u.basic.integer.encoding = lttng_encode_UTF8;
 	field->event_field.type.u.array.length = TMPLEN;
 
-	field->get_size = backtrace_get_size;
-	field->record = backtrace_record;
+	field->get_size = callstack_get_size;
+	field->record = callstack_record;
 	wrapper_vmalloc_sync_all();
-	printk("kernel-backtrace ok\n");
+	printk("callstack ok\n");
 	return 0;
 }
-EXPORT_SYMBOL_GPL(lttng_add_kernel_backtrace_to_ctx);
+EXPORT_SYMBOL_GPL(lttng_add_callstack_kernel_to_ctx);
 
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Francis Giraldeau");
