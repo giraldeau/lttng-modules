@@ -29,14 +29,18 @@
 #include "wrapper/vmalloc.h"
 #include "lttng-tracer.h"
 
-#define TMPLEN 10
+#define MAX_ENTRIES 10
 
 static
 size_t callstack_get_size(size_t offset)
 {
 	size_t size = 0;
 
-	size += TMPLEN;
+	// FIXME: does the alignment is handled correctly here?
+	// FIXME: return only required space for this particular sequence instead of MAX_ENTRIES
+	size += lib_ring_buffer_align(offset, lttng_alignof(unsigned char));
+	size += sizeof(unsigned char);
+	size += sizeof(unsigned long) * MAX_ENTRIES;
 	return size;
 }
 
@@ -45,7 +49,19 @@ void callstack_record(struct lttng_ctx_field *field,
 		 struct lib_ring_buffer_ctx *ctx,
 		 struct lttng_channel *chan)
 {
-	chan->ops->event_write(ctx, "kbt", TMPLEN);
+	unsigned char len = MAX_ENTRIES;
+	unsigned long entries[MAX_ENTRIES];
+	int i;
+
+	// Dummy test data
+	for (i = 0; i < MAX_ENTRIES; i++)
+		entries[i] = i;
+
+	// FIXME: what is the purpose of this align?
+	// (((alignment) - (align_drift)) & ((alignment) - 1)) with alignment=1 always yield 0
+	// lib_ring_buffer_align_ctx(ctx, 1);
+	chan->ops->event_write(ctx, &len, sizeof(unsigned char));
+	chan->ops->event_write(ctx, entries, sizeof(unsigned long) * MAX_ENTRIES);
 }
 
 int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
@@ -61,15 +77,23 @@ int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 		return -EEXIST;
 	}
 	field->event_field.name = "kcallstack";
-	field->event_field.type.atype = atype_array;
-	field->event_field.type.u.array.elem_type.atype = atype_integer;
-	field->event_field.type.u.array.elem_type.u.basic.integer.size = sizeof(char) * CHAR_BIT;
-	field->event_field.type.u.array.elem_type.u.basic.integer.alignment = lttng_alignof(char) * CHAR_BIT;
-	field->event_field.type.u.array.elem_type.u.basic.integer.signedness = lttng_is_signed_type(char);
-	field->event_field.type.u.array.elem_type.u.basic.integer.reverse_byte_order = 0;
-	field->event_field.type.u.array.elem_type.u.basic.integer.base = 10;
-	field->event_field.type.u.array.elem_type.u.basic.integer.encoding = lttng_encode_UTF8;
-	field->event_field.type.u.array.length = TMPLEN;
+
+	field->event_field.type.atype = atype_sequence;
+	field->event_field.type.u.sequence.elem_type.atype = atype_integer;
+	field->event_field.type.u.sequence.elem_type.u.basic.integer.size = sizeof(unsigned long) * CHAR_BIT;
+	field->event_field.type.u.sequence.elem_type.u.basic.integer.alignment = lttng_alignof(char) * CHAR_BIT;
+	field->event_field.type.u.sequence.elem_type.u.basic.integer.signedness = lttng_is_signed_type(unsigned long);
+	field->event_field.type.u.sequence.elem_type.u.basic.integer.reverse_byte_order = 0;
+	field->event_field.type.u.sequence.elem_type.u.basic.integer.base = 16;
+	field->event_field.type.u.sequence.elem_type.u.basic.integer.encoding = lttng_encode_none;
+
+	field->event_field.type.u.sequence.length_type.atype = atype_integer;
+	field->event_field.type.u.sequence.length_type.u.basic.integer.size = sizeof(unsigned char) * CHAR_BIT;
+	field->event_field.type.u.sequence.length_type.u.basic.integer.alignment = lttng_alignof(unsigned char) * CHAR_BIT;
+	field->event_field.type.u.sequence.length_type.u.basic.integer.signedness = lttng_is_signed_type(unsigned long);
+	field->event_field.type.u.sequence.length_type.u.basic.integer.reverse_byte_order = 0;
+	field->event_field.type.u.sequence.length_type.u.basic.integer.base = 10;
+	field->event_field.type.u.sequence.length_type.u.basic.integer.encoding = lttng_encode_none;
 
 	field->get_size = callstack_get_size;
 	field->record = callstack_record;
