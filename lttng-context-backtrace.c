@@ -60,7 +60,7 @@ int lttng_add_kernel_backtrace_to_ctx(struct lttng_ctx **ctx)
 		printk("kernel-backtrace lttng_find_context failed\n");
 		return -EEXIST;
 	}
-	field->event_field.name = "kernel-backtrace";
+	field->event_field.name = "kernel_backtrace";
 	field->event_field.type.atype = atype_array;
 	field->event_field.type.u.array.elem_type.atype = atype_integer;
 	field->event_field.type.u.array.elem_type.u.basic.integer.size = sizeof(char) * CHAR_BIT;
