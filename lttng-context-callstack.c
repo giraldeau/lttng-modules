@@ -57,9 +57,6 @@ void callstack_record(struct lttng_ctx_field *field,
 	for (i = 0; i < MAX_ENTRIES; i++)
 		entries[i] = i;
 
-	// FIXME: what is the purpose of this align?
-	// (((alignment) - (align_drift)) & ((alignment) - 1)) with alignment=1 always yield 0
-	// lib_ring_buffer_align_ctx(ctx, 1);
 	chan->ops->event_write(ctx, &len, sizeof(unsigned char));
 	chan->ops->event_write(ctx, entries, sizeof(unsigned long) * MAX_ENTRIES);
 }
@@ -73,7 +70,7 @@ int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 		return -ENOMEM;
 	if (lttng_find_context(*ctx, "kcallstack")) {
 		lttng_remove_context_field(ctx, field);
-		printk("callstack:kernel lttng_find_context failed\n");
+		printk("kcallstack lttng_find_context failed\n");
 		return -EEXIST;
 	}
 	field->event_field.name = "kcallstack";
@@ -98,7 +95,6 @@ int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 	field->get_size = callstack_get_size;
 	field->record = callstack_record;
 	wrapper_vmalloc_sync_all();
-	printk("callstack ok\n");
 	return 0;
 }
 EXPORT_SYMBOL_GPL(lttng_add_callstack_kernel_to_ctx);
