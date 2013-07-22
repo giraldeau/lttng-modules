@@ -24,6 +24,7 @@
 #include <linux/slab.h>
 #include <linux/sched.h>
 #include <linux/utsname.h>
+#include <linux/stacktrace.h>
 #include "lttng-events.h"
 #include "wrapper/ringbuffer/frontend_types.h"
 #include "wrapper/vmalloc.h"
@@ -51,11 +52,15 @@ void callstack_record(struct lttng_ctx_field *field,
 {
 	unsigned char len = MAX_ENTRIES;
 	unsigned long entries[MAX_ENTRIES];
-	int i;
+	struct stack_trace trace;
 
-	// Dummy test data
-	for (i = 0; i < MAX_ENTRIES; i++)
-		entries[i] = i;
+	memset(entries, 0, sizeof(entries));
+	trace.skip = 0;
+	trace.nr_entries = 0;
+	trace.max_entries = MAX_ENTRIES;
+	trace.entries = entries;
+
+	save_stack_trace(&trace);
 
 	chan->ops->event_write(ctx, &len, sizeof(unsigned char));
 	chan->ops->event_write(ctx, entries, sizeof(unsigned long) * MAX_ENTRIES);
