@@ -79,15 +79,22 @@ static inline notrace u64 lib_ring_buffer_clock_read(struct channel *chan)
 }
 
 static inline
-size_t ctx_get_size(size_t offset, struct lttng_ctx *ctx)
+size_t ctx_get_size(size_t offset, struct lib_ring_buffer_ctx *bufctx,
+		    struct lttng_channel *chan,
+		    struct lttng_ctx *ctx)
 {
 	int i;
 	size_t orig_offset = offset;
 
 	if (likely(!ctx))
 		return 0;
-	for (i = 0; i < ctx->nr_fields; i++)
-		offset += ctx->fields[i].get_size(offset);
+	for (i = 0; i < ctx->nr_fields; i++) {
+		if (ctx->fields[i].get_size)
+			offset += ctx->fields[i].get_size(offset);
+		if (ctx->fields[i].get_size_arg)
+			offset += ctx->fields[i].get_size_arg(offset,
+					&ctx->fields[i], bufctx, chan);
+	}
 	return offset - orig_offset;
 }
 
@@ -163,8 +170,8 @@ unsigned char record_header_size(const struct lib_ring_buffer_config *config,
 		padding = 0;
 		WARN_ON_ONCE(1);
 	}
-	offset += ctx_get_size(offset, event->ctx);
-	offset += ctx_get_size(offset, lttng_chan->ctx);
+	offset += ctx_get_size(offset, ctx, lttng_chan, event->ctx);
+	offset += ctx_get_size(offset, ctx, lttng_chan, lttng_chan->ctx);
 
 	*pre_header_padding = padding;
 	return offset - orig_offset;
