@@ -1,9 +1,9 @@
 /*
- * lttng-context-hostname.c
+ * lttng-context-callstack.c
  *
- * LTTng hostname context.
+ * LTTng callstack context.
  *
- * Copyright (C) 2009-2012 Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
+ * Copyright (C) 2013 Mathieu Desnoyers <mathieu.desnoyers@efficios.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -106,4 +106,4 @@ EXPORT_SYMBOL_GPL(lttng_add_callstack_kernel_to_ctx);
 
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Francis Giraldeau");
-MODULE_DESCRIPTION("Linux Trace Toolkit Backtrace Support");
+MODULE_DESCRIPTION("Linux Trace Toolkit Callstack Support");
