@@ -33,7 +33,9 @@
 #define MAX_ENTRIES 10
 
 static
-size_t callstack_get_size(size_t offset)
+size_t callstack_get_size(size_t offset, struct lttng_ctx_field *field,
+			  struct lib_ring_buffer_ctx *ctx,
+			  struct lttng_channel *chan)
 {
 	size_t size = 0;
 
@@ -47,8 +49,8 @@ size_t callstack_get_size(size_t offset)
 
 static
 void callstack_record(struct lttng_ctx_field *field,
-		 struct lib_ring_buffer_ctx *ctx,
-		 struct lttng_channel *chan)
+		      struct lib_ring_buffer_ctx *ctx,
+		      struct lttng_channel *chan)
 {
 	unsigned char len = MAX_ENTRIES;
 	unsigned long entries[MAX_ENTRIES];
@@ -97,7 +99,7 @@ int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 	field->event_field.type.u.sequence.length_type.u.basic.integer.base = 10;
 	field->event_field.type.u.sequence.length_type.u.basic.integer.encoding = lttng_encode_none;
 
-	field->get_size = callstack_get_size;
+	field->get_size_arg = callstack_get_size;
 	field->record = callstack_record;
 	wrapper_vmalloc_sync_all();
 	return 0;
