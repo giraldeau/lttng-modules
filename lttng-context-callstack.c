@@ -31,6 +31,11 @@
 #include "lttng-tracer.h"
 
 #define MAX_ENTRIES 10
+#define MAX_NESTING 4
+
+struct lttng_cs {
+	struct stack_trace cs[MAX_NESTING];
+};
 
 static
 size_t callstack_get_size(size_t offset, struct lttng_ctx_field *field,
@@ -68,18 +73,42 @@ void callstack_record(struct lttng_ctx_field *field,
 	chan->ops->event_write(ctx, entries, sizeof(unsigned long) * MAX_ENTRIES);
 }
 
+static
+struct lttng_cs *callstack_data_create(unsigned int entries)
+{
+	// Alloc per-cpu an array of struct stack_trace
+	// alloc_percpu();
+	// for_each_possible_cpu(cpu)
+	// 	struct lttng_cs *ptr = per_cpu_ptr(var, cpu);
+	// 	for each stack_trace
+	// 		Alloc stack_trace entries
+	return NULL;
+}
+
+static
+void callstack_data_free(struct lttng_cs *cs)
+{
+	// free_percpu();
+}
+
 int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 {
 	struct lttng_ctx_field *field;
+	struct lttng_cs *cs;
+	int ret;
 
 	field = lttng_append_context(ctx);
 	if (!field)
 		return -ENOMEM;
 	if (lttng_find_context(*ctx, "kcallstack")) {
-		lttng_remove_context_field(ctx, field);
 		printk("kcallstack lttng_find_context failed\n");
-		return -EEXIST;
+		ret = -EEXIST;
+		goto find_error;
 	}
+	cs = callstack_data_create(MAX_ENTRIES);
+	if (!cs)
+		goto create_error;
+
 	field->event_field.name = "kcallstack";
 
 	field->event_field.type.atype = atype_sequence;
@@ -101,8 +130,15 @@ int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 
 	field->get_size_arg = callstack_get_size;
 	field->record = callstack_record;
+	field->data = cs;
 	wrapper_vmalloc_sync_all();
 	return 0;
+
+create_error:
+	callstack_data_free(cs);
+find_error:
+	lttng_remove_context_field(ctx, field);
+	return ret;
 }
 EXPORT_SYMBOL_GPL(lttng_add_callstack_kernel_to_ctx);
 
