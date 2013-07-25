@@ -164,6 +164,7 @@ struct lttng_ctx_field {
 		struct lttng_perf_counter_field *perf_counter;
 	} u;
 	void (*destroy)(struct lttng_ctx_field *field);
+	void *data;
 };
 
 struct lttng_ctx {
