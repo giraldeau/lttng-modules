@@ -27,21 +27,34 @@
 #include <linux/stacktrace.h>
 #include <linux/spinlock.h>
 #include "lttng-events.h"
-//#include "wrapper/ringbuffer/frontend_types.h"
 #include "wrapper/ringbuffer/backend.h"
 #include "wrapper/ringbuffer/frontend.h"
 #include "wrapper/vmalloc.h"
 #include "lttng-tracer.h"
 
-#define MAX_ENTRIES 40
+#define MAX_ENTRIES 25 // BUG: saving more than 30 entries causes trace corruption
 #define MAX_NESTING 4 // defined according to frontend_api.h
 
 struct lttng_cs {
 	struct stack_trace items[MAX_NESTING];
 };
 
-//static char str[4096];
-//DEFINE_SPINLOCK(lock);
+static
+struct stack_trace *stack_trace_context(struct lttng_ctx_field *field,
+		struct lib_ring_buffer_ctx *ctx)
+{
+	int nesting;
+	struct lttng_cs *cs;
+	struct lttng_cs *cs_set = field->data;
+
+	/*
+	 * get_cpu() is not required, preemption is already
+	 * disabled while event is written
+	 */
+	cs = per_cpu_ptr(cs_set, ctx->cpu);
+	nesting = per_cpu(lib_ring_buffer_nesting, ctx->cpu) - 1;
+	return &cs->items[nesting];
+}
 
 static
 size_t callstack_get_size(size_t offset, struct lttng_ctx_field *field,
@@ -49,28 +62,14 @@ size_t callstack_get_size(size_t offset, struct lttng_ctx_field *field,
 			  struct lttng_channel *chan)
 {
 	size_t size = 0;
-	int cpu, nesting;
-	struct lttng_cs *cs;
-	struct lttng_cs *cs_set = field->data;
-	struct stack_trace *trace;
 	int i;
+	struct stack_trace *trace = stack_trace_context(field, ctx);
 
-	cpu = get_cpu();
-	cs = per_cpu_ptr(cs_set, cpu);
-	nesting = per_cpu(lib_ring_buffer_nesting, cpu) - 1;
-	trace = ctx->data = &cs->items[nesting];
-	put_cpu();
-
-	memset(trace->entries, 0, sizeof(unsigned long) * trace->max_entries);
+	// reset stack trace
+	for (i = 0; i < trace->max_entries; i++)
+		trace->entries[i] = 0;
 	trace->nr_entries = 0;
-	// TEMP: fill with test data
-	for (i = 0; i < trace->max_entries; i++) {
-		trace->entries[i] = i;
-	}
-	trace->nr_entries = trace->max_entries;
-	//save_stack_trace(trace);
-
-	//printk("ctx=0x%p trace=0x%p\n", ctx, trace);
+	save_stack_trace(trace);
 
 	size += lib_ring_buffer_align(offset, lttng_alignof(unsigned int));
 	size += sizeof(unsigned int);
@@ -83,15 +82,10 @@ void callstack_record(struct lttng_ctx_field *field,
 		      struct lib_ring_buffer_ctx *ctx,
 		      struct lttng_channel *chan)
 {
-	int i;
-	struct stack_trace *trace = ctx->data;
-	int len = trace->nr_entries;
-
-	//printk("trace=0x%p nr_entries=%d\n", trace, trace->nr_entries);
-	printk("nr_entries=%d\n", trace->nr_entries);
-	chan->ops->event_write(ctx, &len, sizeof(unsigned int));
-	for (i = 0; i < trace->nr_entries; i++)
-		chan->ops->event_write(ctx, &trace->entries[i], sizeof(unsigned long));
+	struct stack_trace *trace = stack_trace_context(field, ctx);
+	chan->ops->event_write(ctx, &trace->nr_entries, sizeof(unsigned int));
+	chan->ops->event_write(ctx, trace->entries,
+			sizeof(unsigned long) * trace->nr_entries);
 }
 
 static
