@@ -39,19 +39,60 @@ struct lttng_cs {
 	struct stack_trace items[MAX_NESTING];
 };
 
+struct field_data {
+	int type;
+	struct lttng_cs __percpu *cs_percpu;
+};
+
+struct lttng_cs_type {
+	const char *name;
+	const char *save_func_name;
+	void (*save_func)(struct stack_trace *trace);
+};
+
+enum cs_ctx_types {
+		KCALLSTACK = 0,
+		UCALLSTACK = 1,
+};
+
+static struct lttng_cs_type cs_types[] = {
+		{ 	.name = "kcallstack",
+			.save_func_name = "save_stack_trace",
+			.save_func = NULL, },
+		{ 	.name = "ucallstack",
+			.save_func_name = "save_stack_trace_user",
+			.save_func = NULL, },
+};
+
+int init_type(int type)
+{
+	unsigned long func;
+
+	if (cs_types[type].save_func)
+		return 0;
+	func = kallsyms_lookup_funcptr(cs_types[type].save_func_name);
+	if (!func) {
+		printk(KERN_WARNING "LTTng: symbol lookup failed: %s\n",
+				cs_types[type].save_func_name);
+		return -EINVAL;
+	}
+	cs_types[type].save_func = (void *) func;
+	return 0;
+}
+
 static
 struct stack_trace *stack_trace_context(struct lttng_ctx_field *field,
 		struct lib_ring_buffer_ctx *ctx)
 {
 	int nesting;
 	struct lttng_cs *cs;
-	struct lttng_cs *cs_set = field->data;
+	struct field_data *fdata = field->data;
 
 	/*
 	 * get_cpu() is not required, preemption is already
 	 * disabled while event is written
 	 */
-	cs = per_cpu_ptr(cs_set, ctx->cpu);
+	cs = per_cpu_ptr(fdata->cs_percpu, ctx->cpu);
 	nesting = per_cpu(lib_ring_buffer_nesting, ctx->cpu) - 1;
 	return &cs->items[nesting];
 }
@@ -63,13 +104,15 @@ size_t callstack_get_size(size_t offset, struct lttng_ctx_field *field,
 {
 	size_t size = 0;
 	int i;
+	struct field_data *fdata = field->data;
 	struct stack_trace *trace = stack_trace_context(field, ctx);
 
 	// reset stack trace
 	for (i = 0; i < trace->max_entries; i++)
 		trace->entries[i] = 0;
 	trace->nr_entries = 0;
-	save_stack_trace(trace);
+
+	cs_types[fdata->type].save_func(trace);
 
 	size += lib_ring_buffer_align(offset, lttng_alignof(unsigned int));
 	size += sizeof(unsigned int);
@@ -89,33 +132,40 @@ void callstack_record(struct lttng_ctx_field *field,
 }
 
 static
-void callstack_data_free(struct lttng_cs __percpu *cs_set)
+void field_data_free(struct field_data *fdata)
 {
 	int cpu, i;
 	struct lttng_cs *cs;
 
-	if (!cs_set)
+	if (!fdata)
 		return;
 	for_each_possible_cpu(cpu) {
-		cs = per_cpu_ptr(cs_set, cpu);
+		cs = per_cpu_ptr(fdata->cs_percpu, cpu);
 		for (i = 0; i < MAX_NESTING; i++) {
 			kfree(cs->items[i].entries);
 		}
 	}
-	free_percpu(cs_set);
+	free_percpu(fdata->cs_percpu);
+	kfree(fdata);
 }
 
 static
-struct lttng_cs __percpu *callstack_data_create(unsigned int entries)
+struct field_data __percpu *field_data_create(unsigned int entries)
 {
 	int cpu, i;
 	struct stack_trace *item;
 	struct lttng_cs *cs;
 	struct lttng_cs __percpu *cs_set;
+	struct field_data* fdata;
 
-	cs_set = alloc_percpu(struct lttng_cs);
-	if (!cs_set)
+	fdata = kzalloc(sizeof(unsigned long) * entries, GFP_KERNEL);
+	if (!fdata)
 		return NULL;
+	cs_set = alloc_percpu(struct lttng_cs);
+	if (!cs_set) {
+		goto error_alloc;
+	}
+	fdata->cs_percpu = cs_set;
 	for_each_possible_cpu(cpu) {
 		cs = per_cpu_ptr(cs_set, cpu);
 		for (i = 0; i < MAX_NESTING; i++) {
@@ -127,34 +177,40 @@ struct lttng_cs __percpu *callstack_data_create(unsigned int entries)
 			item->max_entries = entries;
 		}
 	}
-	return cs_set;
+	return fdata;
 
 error_alloc:
-	callstack_data_free(cs_set);
+	field_data_free(fdata);
 	return NULL;
 }
 
-int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
+int lttng_add_callstack_generic(struct lttng_ctx **ctx, int ctx_type)
 {
+	const char *ctx_name = cs_types[ctx_type].name;
 	struct lttng_ctx_field *field;
-	struct lttng_cs *cs;
+	struct field_data *fdata;
 	int ret;
+
+	ret = init_type(ctx_type);
+	if (ret)
+		return ret;
 
 	field = lttng_append_context(ctx);
 	if (!field)
 		return -ENOMEM;
-	if (lttng_find_context(*ctx, "kcallstack")) {
-		printk("kcallstack lttng_find_context failed\n");
+	if (lttng_find_context(*ctx, ctx_name)) {
+		printk("%s lttng_find_context failed\n", ctx_name);
 		ret = -EEXIST;
 		goto error_find;
 	}
-	cs = callstack_data_create(MAX_ENTRIES);
-	if (!cs) {
+	fdata = field_data_create(MAX_ENTRIES);
+	if (!fdata) {
 		ret = -ENOMEM;
 		goto error_create;
 	}
+	fdata->type = ctx_type;
 
-	field->event_field.name = "kcallstack";
+	field->event_field.name = ctx_name;
 
 	field->event_field.type.atype = atype_sequence;
 	field->event_field.type.u.sequence.elem_type.atype = atype_integer;
@@ -175,15 +231,26 @@ int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
 
 	field->get_size_arg = callstack_get_size;
 	field->record = callstack_record;
-	field->data = cs;
+	field->data = fdata;
 	wrapper_vmalloc_sync_all();
 	return 0;
 
 error_create:
-	callstack_data_free(cs);
+	field_data_free(fdata);
 error_find:
 	lttng_remove_context_field(ctx, field);
 	return ret;
+}
+
+int lttng_add_callstack_user_to_ctx(struct lttng_ctx **ctx)
+{
+	return lttng_add_callstack_generic(ctx, UCALLSTACK);
+}
+EXPORT_SYMBOL_GPL(lttng_add_callstack_user_to_ctx);
+
+int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx)
+{
+	return lttng_add_callstack_generic(ctx, KCALLSTACK);
 }
 EXPORT_SYMBOL_GPL(lttng_add_callstack_kernel_to_ctx);
 
