@@ -200,6 +200,7 @@ struct lib_ring_buffer_ctx {
 					 */
 	u64 tsc;			/* time-stamp counter value */
 	unsigned int rflags;		/* reservation flags */
+	void *data;
 };
 
 /**
