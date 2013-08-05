@@ -69,18 +69,22 @@ out:
 	jprobe_return();
 }
 
-static int init_probe(void)
+static int __init lttng_addons_mmap_init(void)
 {
 	int ret;
 
 	vma_probe.kp.addr = (void *) kallsyms_lookup_name("perf_event_mmap");
 	vma_probe.entry = vma_probe_handler;
+
 	ret = register_jprobe(&vma_probe);
 	if (ret < 0) {
 		printk(KERN_INFO "Error loading jprobe %d\n", ret);
 		goto error;
 	}
+
+	printk("lttng_addons_mmap loaded\n");
 	return 0;
+
 error:
 	unregister_jprobe(&vma_probe);
 	return -1;
