@@ -169,6 +169,24 @@ TRACE_EVENT(inet_sock_local_out,
 			__entry->check, __entry->window, __entry->flags)
 )
 
+TRACE_EVENT(mmap_exec_file,
+		TP_PROTO(const char *name, unsigned long start, unsigned long len, unsigned long pgoff),
+		TP_ARGS(name, start, len, pgoff),
+		TP_STRUCT__entry(
+			__string(name, name)
+			__field_hex(unsigned long, start)
+			__field_hex(unsigned long, len)
+			__field_hex(unsigned long, pgoff)
+		),
+		TP_fast_assign(
+			tp_strcpy(name, name)
+			tp_assign(start, start)
+			tp_assign(len, len)
+			tp_assign(pgoff, pgoff)
+		),
+		TP_printk("%s %x %x %x", __entry->name, __entry->start, __entry->len, __entry->pgoff)
+)
+
 #endif /* LTTNG_NET_H_ */
 
 /* This part must be outside protection */
