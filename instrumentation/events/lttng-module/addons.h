@@ -187,6 +187,7 @@ TRACE_EVENT(mmap_exec_file,
 		TP_printk("%s %x %x %x", __entry->name, __entry->start, __entry->len, __entry->pgoff)
 )
 
+<<<<<<< HEAD
 TRACE_EVENT(sys_entry,
 	TP_PROTO(short id),
 	TP_ARGS(id),
@@ -221,6 +222,8 @@ TRACE_EVENT(sys_entry_callsite,
 	TP_printk("%d", __entry->id)
 )
 
+=======
+>>>>>>> c383509... Add mmap tracepoint
 #endif /* LTTNG_NET_H_ */
 
 /* This part must be outside protection */

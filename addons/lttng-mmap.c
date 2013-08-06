@@ -41,6 +41,7 @@ static struct jprobe vma_probe;
 void vma_probe_handler(struct vm_area_struct *vma)
 {
 	struct file *file = vma->vm_file;
+	int size;
 	char *buf = NULL;
 	const char *name;
 
@@ -56,35 +57,31 @@ void vma_probe_handler(struct vm_area_struct *vma)
 	name = d_path(&file->f_path, buf, PATH_MAX);
 	if (!name)
 		goto out;
-	//printk("vma->vm_file %s\n", name);
+	printk("vma->vm_file %s\n", name);
 	trace_mmap_exec_file(name,
 						 vma->vm_start,
 						 vma->vm_end - vma->vm_start,
 						 (u64)vma->vm_pgoff << PAGE_SHIFT);
 
 out:
-	//if (printk_ratelimit())
-		//printk("vma_probe_handler\n");
+	if (printk_ratelimit())
+		printk("vma_probe_handler\n");
 	kfree(buf);
 	jprobe_return();
 }
 
-static int __init lttng_addons_mmap_init(void)
+static int init_probe(void)
 {
 	int ret;
 
 	vma_probe.kp.addr = (void *) kallsyms_lookup_name("perf_event_mmap");
 	vma_probe.entry = vma_probe_handler;
-
 	ret = register_jprobe(&vma_probe);
 	if (ret < 0) {
 		printk(KERN_INFO "Error loading jprobe %d\n", ret);
 		goto error;
 	}
-
-	printk("lttng_addons_mmap loaded\n");
 	return 0;
-
 error:
 	unregister_jprobe(&vma_probe);
 	return -1;
@@ -92,6 +89,8 @@ error:
 
 static int __init lttng_addons_mmap_init(void)
 {
+	int ret;
+
 	if (init_probe())
 		return -1;
 	printk("lttng_addons_mmap loaded\n");
