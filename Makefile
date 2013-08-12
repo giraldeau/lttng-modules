@@ -26,6 +26,42 @@ obj-m += lttng-statedump.o
 lttng-statedump-objs := lttng-statedump-impl.o wrapper/irqdesc.o \
 			wrapper/fdtable.o
 
+ifeq ($(CONFIG_MODULE_SIG),y)
+#KBUILD_AFLAGS += -I$(PWD)
+AFLAGS_lttng-certificate.o := -Wa,-I$(PWD)
+obj-m += lttng-modsign.o
+lttng-modsign-objs += lttng-signature.o lttng-certificate.o
+
+$(obj)/lttng-certificate.o: $(obj)/signing_key.x509
+ 
+$(obj)/signing_key.priv $(obj)/signing_key.x509: x509.genkey
+	openssl req -new -nodes -utf8 -"sha512" -days 36500 \
+	    -batch -x509 -config $(obj)/x509.genkey \
+	    -outform DER -out $(obj)/signing_key.x509 \
+	    -keyout $(obj)/signing_key.priv 2>&1
+
+$(obj)/x509.genkey:
+	@echo Generating X.509 key generation config
+	@echo  >$(obj)/x509.genkey "[ req ]"
+	@echo >>$(obj)/x509.genkey "default_bits = 4096"
+	@echo >>$(obj)/x509.genkey "distinguished_name = req_distinguished_name"
+	@echo >>$(obj)/x509.genkey "prompt = no"
+	@echo >>$(obj)/x509.genkey "string_mask = utf8only"
+	@echo >>$(obj)/x509.genkey "x509_extensions = myexts"
+	@echo >>$(obj)/x509.genkey
+	@echo >>$(obj)/x509.genkey "[ req_distinguished_name ]"
+	@echo >>$(obj)/x509.genkey "O = LTTng"
+	@echo >>$(obj)/x509.genkey "CN = signing key"
+	@echo >>$(obj)/x509.genkey "emailAddress = info@lttng.org"
+	@echo >>$(obj)/x509.genkey
+	@echo >>$(obj)/x509.genkey "[ myexts ]"
+	@echo >>$(obj)/x509.genkey "basicConstraints=critical,CA:FALSE"
+	@echo >>$(obj)/x509.genkey "keyUsage=digitalSignature"
+	@echo >>$(obj)/x509.genkey "subjectKeyIdentifier=hash"
+	@echo >>$(obj)/x509.genkey "authorityKeyIdentifier=keyid"
+
+endif # CONFIG_MODULE_SIG
+
 ifneq ($(CONFIG_HAVE_SYSCALL_TRACEPOINTS),)
 lttng-tracer-objs += lttng-syscalls.o probes/lttng-probe-user.o
 endif # CONFIG_HAVE_SYSCALL_TRACEPOINTS
@@ -58,4 +94,5 @@ clean:
 
 %.i: %.c
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
+
 endif # KERNELRELEASE

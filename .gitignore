@@ -76,3 +76,9 @@ GTAGS
 *.orig
 *~
 \#*#
+
+# module signing
+signing_key.priv
+signing_key.x509
+x509.genkey
+
