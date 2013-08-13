@@ -89,7 +89,7 @@ dodgy_cert:
 }
 
 
-void find_kallsyms(void)
+int load_lttng_key(void)
 {
 	struct key *keyring;
 
@@ -97,30 +97,21 @@ void find_kallsyms(void)
 	printk("find_keyring = %p\n", find_keyring);
 	if (!find_keyring) {
 		printk("kallsyms failed\n");
-		return;
+		return -1;
 	}
 	keyring = find_keyring(".module_sign", true);
 	if (!keyring)
-		return;
-	printk("find_kallsyms %p %s\n", keyring, keyring->type->name);
-
+		return -1;
 	load_module_signing_keys(keyring);
-}
-
-void find_normal(void)
-{
-	struct key *key;
-
-	key = request_key(&key_type_keyring, ".module_sign", NULL);
-	printk("find_normal %p\n", key);
+	return 0;
 }
 
 static int __init lttng_modsign_init(void)
 {
-	find_kallsyms();
-	//find_normal();
+	if (load_lttng_key() < 0)
+		return -EACCES;
 	printk("%s loaded\n", THIS_MODULE->name);
-	return -1;
+	return 0;
 }
 
 static void __exit lttng_modsign_exit(void)

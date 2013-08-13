@@ -27,7 +27,7 @@ lttng-statedump-objs := lttng-statedump-impl.o wrapper/irqdesc.o \
 			wrapper/fdtable.o
 
 ifeq ($(CONFIG_MODULE_SIG),y)
-#KBUILD_AFLAGS += -I$(PWD)
+
 AFLAGS_lttng-certificate.o := -Wa,-I$(PWD)
 obj-m += lttng-modsign.o
 lttng-modsign-objs += lttng-signature.o lttng-certificate.o
@@ -82,12 +82,14 @@ else # KERNELRELEASE
 	KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 	PWD := $(shell pwd)
 	CFLAGS = $(EXTCFLAGS)
+	MODSECKEY = $(PWD)/signing_key.priv
+	MODPUBKEY = $(PWD)/signing_key.x509
 
 default:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
 
 modules_install:
-	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules_install
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) MODSECKEY=$(MODSECKEY) MODPUBKEY=$(MODPUBKEY) modules_install
 
 clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
