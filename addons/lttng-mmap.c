@@ -26,6 +26,7 @@
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/printk.h>
+#include <linux/kallsyms.h>
 
 #include "../lttng-abi.h"
 #include "../instrumentation/events/lttng-module/addons.h"
@@ -40,7 +41,6 @@ static struct jprobe vma_probe;
 void vma_probe_handler(struct vm_area_struct *vma)
 {
 	struct file *file = vma->vm_file;
-	int size;
 	char *buf = NULL;
 	const char *name;
 
@@ -71,8 +71,6 @@ out:
 
 static int init_probe(void)
 {
-	int ret;
-
 	vma_probe.kp.addr = (void *) kallsyms_lookup_name("perf_event_mmap");
 	vma_probe.entry = vma_probe_handler;
 	ret = register_jprobe(&vma_probe);
