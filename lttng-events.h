@@ -153,6 +153,9 @@ struct lttng_perf_counter_field {
 struct lttng_ctx_field {
 	struct lttng_event_field event_field;
 	size_t (*get_size)(size_t offset);
+	size_t (*get_size_arg)(size_t offset, struct lttng_ctx_field *field,
+			       struct lib_ring_buffer_ctx *ctx,
+			       struct lttng_channel *chan);
 	void (*record)(struct lttng_ctx_field *field,
 		       struct lib_ring_buffer_ctx *ctx,
 		       struct lttng_channel *chan);
@@ -160,6 +163,7 @@ struct lttng_ctx_field {
 		struct lttng_perf_counter_field *perf_counter;
 	} u;
 	void (*destroy)(struct lttng_ctx_field *field);
+	void *data;
 };
 
 struct lttng_ctx {
@@ -389,6 +393,8 @@ int lttng_add_vtid_to_ctx(struct lttng_ctx **ctx);
 int lttng_add_ppid_to_ctx(struct lttng_ctx **ctx);
 int lttng_add_vppid_to_ctx(struct lttng_ctx **ctx);
 int lttng_add_hostname_to_ctx(struct lttng_ctx **ctx);
+int lttng_add_callstack_kernel_to_ctx(struct lttng_ctx **ctx);
+int lttng_add_callstack_user_to_ctx(struct lttng_ctx **ctx);
 #if defined(CONFIG_PERF_EVENTS) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,33))
 int lttng_add_perf_counter_to_ctx(uint32_t type,
 				  uint64_t config,
