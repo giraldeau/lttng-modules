@@ -71,6 +71,8 @@ out:
 
 static int init_probe(void)
 {
+	int ret;
+
 	vma_probe.kp.addr = (void *) kallsyms_lookup_name("perf_event_mmap");
 	vma_probe.entry = vma_probe_handler;
 	ret = register_jprobe(&vma_probe);
@@ -86,8 +88,6 @@ error:
 
 static int __init lttng_addons_mmap_init(void)
 {
-	int ret;
-
 	if (init_probe())
 		return -1;
 	printk("lttng_addons_mmap loaded\n");
