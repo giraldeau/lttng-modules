@@ -187,6 +187,18 @@ TRACE_EVENT(mmap_exec_file,
 		TP_printk("%s %x %x %x", __entry->name, __entry->start, __entry->len, __entry->pgoff)
 )
 
+TRACE_EVENT(sys_entry,
+	TP_PROTO(short id),
+	TP_ARGS(id),
+	TP_STRUCT__entry(
+		__field(short, id)
+	),
+	TP_fast_assign(
+		tp_assign(id, id)
+	),
+	TP_printk("%d", __entry->id)
+)
+
 #endif /* LTTNG_NET_H_ */
 
 /* This part must be outside protection */
