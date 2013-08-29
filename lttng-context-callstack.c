@@ -23,6 +23,8 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/thread_info.h>
+#include <linux/uaccess.h>
 #include <linux/utsname.h>
 #include <linux/stacktrace.h>
 #include <linux/spinlock.h>
@@ -33,7 +35,9 @@
 #include "lttng-tracer.h"
 
 #define MAX_ENTRIES 25 // BUG: saving more than 30 entries causes trace corruption
+#define MAX_ADDRESS 50 // 4k / 8 = 512
 #define MAX_NESTING 4 // defined according to frontend_api.h
+#define UPREFIX "ucallstack "
 
 struct lttng_cs {
 	struct stack_trace items[MAX_NESTING];
@@ -55,14 +59,72 @@ enum cs_ctx_types {
 		UCALLSTACK = 1,
 };
 
+void guess_stack_trace(struct stack_trace *trace);
+
 static struct lttng_cs_type cs_types[] = {
 		{ 	.name = "kcallstack",
 			.save_func_name = "save_stack_trace",
 			.save_func = NULL, },
 		{ 	.name = "ucallstack",
-			.save_func_name = "save_stack_trace_user",
-			.save_func = NULL, },
+			.save_func_name = "guess_stack_trace",
+			.save_func = guess_stack_trace, },
 };
+
+static inline int
+valid_user_ptr(const void __user *ptr)
+{
+	return (__range_not_ok(ptr, sizeof(ptr), TASK_SIZE) == 0);
+}
+
+void guess_stack_trace(struct stack_trace *trace)
+{
+	struct vm_area_struct *vma;
+	struct pt_regs *regs = task_pt_regs(current);
+	unsigned long sp = regs->sp;
+	unsigned long top = current->mm->start_stack;
+	unsigned long eos = top - (current->mm->stack_vm << PAGE_SHIFT);
+	unsigned long i;
+	unsigned long addr;
+	unsigned long data;
+
+	if (printk_ratelimit())
+		printk(UPREFIX "%s", current->comm);
+
+	if (!current->mm) {
+		if (printk_ratelimit())
+			printk(UPREFIX "current->mm is NULL %s\n", current->comm);
+		return;
+	}
+
+	if (sp < eos || sp > top) {
+		if (printk_ratelimit())
+			printk(UPREFIX "stack pointer outside mm\n");
+		return;
+	}
+
+	if (trace->nr_entries < trace->max_entries)
+			trace->entries[trace->nr_entries++] = regs->ip;
+
+	for (i = 0; i < MAX_ADDRESS &&
+			trace->nr_entries < trace->max_entries; i++) {
+		addr = sp + i * sizeof(unsigned long);
+		if (__copy_from_user_inatomic(&data, (void *)addr, sizeof(data)))
+			break;
+		/*
+		if (!valid_user_ptr((void *)data))
+			continue;
+		*/
+		vma = find_vma(current->mm, data);
+		if (vma && (vma->vm_flags & VM_EXEC) &&
+				(vma->vm_start <= data) &&
+				(data <= vma->vm_end)) {
+			trace->entries[trace->nr_entries++] = data;
+		}
+	}
+
+	if (trace->nr_entries < trace->max_entries)
+		trace->entries[trace->nr_entries++] = ULONG_MAX;
+}
 
 int init_type(int type)
 {
@@ -103,13 +165,10 @@ size_t callstack_get_size(size_t offset, struct lttng_ctx_field *field,
 			  struct lttng_channel *chan)
 {
 	size_t size = 0;
-	int i;
 	struct field_data *fdata = field->data;
 	struct stack_trace *trace = stack_trace_context(field, ctx);
 
 	// reset stack trace
-	for (i = 0; i < trace->max_entries; i++)
-		trace->entries[i] = 0;
 	trace->nr_entries = 0;
 
 	cs_types[fdata->type].save_func(trace);
