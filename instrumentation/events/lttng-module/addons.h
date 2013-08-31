@@ -199,6 +199,18 @@ TRACE_EVENT(sys_entry,
 	TP_printk("%d", __entry->id)
 )
 
+TRACE_EVENT(sys_entry_callsite,
+	TP_PROTO(int len, unsigned long *entries),
+	TP_ARGS(len, entries),
+	TP_STRUCT__entry(
+		__dynamic_array_hex(unsigned long, callsite, len)
+	),
+	TP_fast_assign(
+		tp_memcpy_dyn(callsite, entries)
+	),
+	TP_printk("%d", __entry->id)
+)
+
 #endif /* LTTNG_NET_H_ */
 
 /* This part must be outside protection */
