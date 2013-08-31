@@ -112,7 +112,7 @@ static void syscall_entry_handler(void *__data, struct pt_regs *regs, long id)
 	trace_sys_entry(id);
 
 	preempt_disable();
-	trace_sys_entry_callsite(
+	trace_sys_entry_callsite(id,
 		({int x = stack_trace_get_size(); x;}),
 		({unsigned long *entries = stack_trace_get_entries(); entries;}));
 	preempt_enable();
