@@ -81,7 +81,6 @@ error_alloc:
  *
  * @return size
  */
-static
 int stack_trace_get_size(void)
 {
 	struct stack_trace *item;
@@ -94,8 +93,8 @@ int stack_trace_get_size(void)
 	put_cpu();
 	return item->nr_entries;
 }
+EXPORT_SYMBOL(stack_trace_get_size);
 
-static
 unsigned long *stack_trace_get_entries(void)
 {
 	struct stack_trace *item;
@@ -106,15 +105,14 @@ unsigned long *stack_trace_get_entries(void)
 	put_cpu();
 	return item->entries;
 }
+EXPORT_SYMBOL(stack_trace_get_entries);
 
 static void syscall_entry_handler(void *__data, struct pt_regs *regs, long id)
 {
 	trace_sys_entry(id);
 
 	preempt_disable();
-	trace_sys_entry_callsite(id,
-		({int x = stack_trace_get_size(); x;}),
-		({unsigned long *entries = stack_trace_get_entries(); entries;}));
+	trace_sys_entry_callsite(id);
 	preempt_enable();
 }
 
