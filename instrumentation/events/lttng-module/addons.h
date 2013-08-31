@@ -200,15 +200,23 @@ TRACE_EVENT(sys_entry,
 )
 
 TRACE_EVENT(sys_entry_callsite,
-	TP_PROTO(int id, int len, unsigned long *entries),
-	TP_ARGS(id, len, entries),
+	TP_PROTO(int id),
+	TP_ARGS(id),
 	TP_STRUCT__entry(
 		__field(short, id)
-		__dynamic_array_hex(unsigned long, callsite, len)
+		__dynamic_array_hex(unsigned long, callsite, ({
+			extern int stack_trace_get_size(void);
+			int x = stack_trace_get_size();
+			x;
+		}))
 	),
 	TP_fast_assign(
 		tp_assign(id, id)
-		tp_memcpy_dyn(callsite, entries)
+		tp_memcpy_dyn(callsite, ({
+			extern unsigned long *stack_trace_get_entries(void);
+			unsigned long *entries = stack_trace_get_entries();
+			entries;
+		}))
 	),
 	TP_printk("%d", __entry->id)
 )
