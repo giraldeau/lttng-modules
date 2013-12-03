@@ -41,7 +41,6 @@ static struct jprobe vma_probe;
 void vma_probe_handler(struct vm_area_struct *vma)
 {
 	struct file *file = vma->vm_file;
-	int size;
 	char *buf = NULL;
 	const char *name;
 
@@ -89,8 +88,6 @@ error:
 
 static int __init lttng_addons_mmap_init(void)
 {
-	int ret;
-
 	if (init_probe())
 		return -1;
 	printk("lttng_addons_mmap loaded\n");
