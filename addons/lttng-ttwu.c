@@ -38,8 +38,6 @@ DEFINE_TRACE(sched_ttwu);
 static int
 ttwu_probe(struct task_struct *p, unsigned int state, int wake_flags)
 {
-	if (printk_ratelimit())
-		printk("ttwu %d\n", p->pid);
 	trace_sched_ttwu(p->pid);
 	jprobe_return();
 	return 0;

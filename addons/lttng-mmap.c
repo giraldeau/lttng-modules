@@ -56,15 +56,12 @@ void vma_probe_handler(struct vm_area_struct *vma)
 	name = d_path(&file->f_path, buf, PATH_MAX);
 	if (!name)
 		goto out;
-	printk("vma->vm_file %s\n", name);
 	trace_mmap_exec_file(name,
 						 vma->vm_start,
 						 vma->vm_end - vma->vm_start,
 						 (u64)vma->vm_pgoff << PAGE_SHIFT);
 
 out:
-	if (printk_ratelimit())
-		printk("vma_probe_handler\n");
 	kfree(buf);
 	jprobe_return();
 }
