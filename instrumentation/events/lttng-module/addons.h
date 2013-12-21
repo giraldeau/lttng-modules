@@ -221,6 +221,18 @@ TRACE_EVENT(sys_entry_callsite,
 	TP_printk("%d", __entry->id)
 )
 
+TRACE_EVENT(sched_ttwu,
+	TP_PROTO(int tid),
+	TP_ARGS(tid),
+	TP_STRUCT__entry(
+		__field(int, tid)
+	),
+	TP_fast_assign(
+		tp_assign(tid, tid)
+	),
+	TP_printk("%d", __entry->tid)
+)
+
 #endif /* LTTNG_NET_H_ */
 
 /* This part must be outside protection */

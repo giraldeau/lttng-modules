@@ -10,6 +10,7 @@ ccflags-y += -I$(PWD)/addons
 obj-m += lttng-probe-addons.o
 obj-m += lttng-addons.o
 obj-m += lttng-mmap.o
+obj-m += lttng-ttwu.o
 obj-m += lttng-syscall-entry.o
 
 lttng-addons-objs += lttng-net.o lttng-packet.o
