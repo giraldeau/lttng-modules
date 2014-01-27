@@ -233,6 +233,30 @@ TRACE_EVENT(sched_ttwu,
 	TP_printk("%d", __entry->tid)
 )
 
+TRACE_EVENT(vmsync_guest,
+	TP_PROTO(unsigned int cnt),
+	TP_ARGS(cnt),
+	TP_STRUCT__entry(
+		__field(unsigned int, cnt)
+	),
+	TP_fast_assign(
+		tp_assign(cnt, cnt)
+	),
+	TP_printk("%u", __entry->cnt)
+)
+
+TRACE_EVENT(vmsync_host,
+	TP_PROTO(unsigned int cnt),
+	TP_ARGS(cnt),
+	TP_STRUCT__entry(
+		__field(unsigned int, cnt)
+	),
+	TP_fast_assign(
+		tp_assign(cnt, cnt)
+	),
+	TP_printk("%u", __entry->cnt)
+)
+
 #endif /* LTTNG_NET_H_ */
 
 /* This part must be outside protection */
