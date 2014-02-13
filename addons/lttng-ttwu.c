@@ -31,12 +31,31 @@
 
 DEFINE_TRACE(sched_ttwu);
 
+#define SCHED_WAKEUP_TP "sched_wakeup"
+#define SCHED_WAKEUP_NEW_TP "sched_wakeup_new"
+
+static void ttwu_probe(void *__data, struct task_struct *p, int success)
+{
+	trace_sched_ttwu(p->pid);
+}
+
+/*
+ * The sched_wakeup event in Linux > 3.8.0 occurs on the target CPU inside IPI
+ * instead of the source context. It screws the task execution flow.
+ *
+ * We define the event sched_ttwu in two ways. For prior version, a probe is
+ * registered to the sched_wakeup tracepoint. For newer version, we use kprobe
+ * on try_to_wake_up, that occurs before IPI in the source context.
+ */
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3,8,0))
+
 /* static int
  * try_to_wake_up(struct task_struct *p, unsigned int state, int wake_flags)
  */
 
 static int
-ttwu_probe(struct task_struct *p, unsigned int state, int wake_flags)
+ttwu_jprobe_handler(struct task_struct *p, unsigned int state, int wake_flags)
 {
 	trace_sched_ttwu(p->pid);
 	jprobe_return();
@@ -44,7 +63,7 @@ ttwu_probe(struct task_struct *p, unsigned int state, int wake_flags)
 }
 
 static struct jprobe ttwu_jprobe = {
-		.entry = ttwu_probe,
+		.entry = ttwu_jprobe_handler,
 		.kp = {
 			.symbol_name = "try_to_wake_up",
 		},
@@ -54,25 +73,67 @@ static int __init lttng_addons_ttwu_init(void)
 {
 	int ret;
 
+	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	if (ret < 0) {
+		printk("tracepoint_probe_register failed, returned %d\n", ret);
+		goto out;
+	}
 	ret = register_jprobe(&ttwu_jprobe);
 	if (ret < 0) {
 		printk("register_jprobe failed, returned %d\n", ret);
-		return -1;
+		goto err;
 	}
 
-	printk("lttng-ttwu loaded\n");
-	return 0;
+	printk("lttng-ttwu loaded (kprobe)\n");
+out:
+	return ret;
+err:
+	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	goto out;
 }
 module_init(lttng_addons_ttwu_init);
 
 static void __exit lttng_addons_ttwu_exit(void)
 {
+	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	unregister_jprobe(&ttwu_jprobe);
 	printk("lttng-ttwu removed\n");
 }
 module_exit(lttng_addons_ttwu_exit);
 
+#else
+
+static int __init lttng_addons_ttwu_init(void)
+{
+	int ret;
+
+	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_TP, ttwu_probe, NULL);
+	if (ret) {
+		printk("Failed to register probe, returned %d\n", ret);
+	}
+	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	if (ret) {
+		printk("Failed to register probe, returned %d\n", ret);
+		goto err;
+	}
+	printk("lttng-ttwu loaded (tracepoint)\n");
+	return 0;
+err:
+	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	return -1;
+}
+module_init(lttng_addons_ttwu_init);
+
+static void __exit lttng_addons_ttwu_exit(void)
+{
+	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_TP, ttwu_probe, NULL);
+	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	printk("lttng-ttwu removed\n");
+}
+module_exit(lttng_addons_ttwu_exit);
+#endif
+
 MODULE_LICENSE("GPL and additional rights");
 MODULE_AUTHOR("Francis Giraldeau <francis.giraldeau@gmail.com>");
-MODULE_DESCRIPTION("LTTng ttwu event");
+MODULE_DESCRIPTION("LTTng sched_ttwu event");
 
