@@ -29,47 +29,79 @@
 #include "../wrapper/tracepoint.h"
 #include "../lttng-abi.h"
 #include "../instrumentation/events/lttng-module/addons.h"
+#include "../wrapper/tracepoint.h"
 
 #include "lttng-vmsync.h"
 
-DEFINE_TRACE(vmsync_guest);
+DEFINE_TRACE(vmsync_hg_guest);
+DEFINE_TRACE(vmsync_gh_guest);
 
 #define VMSYNC_HRTIMER_INTERVAL (10LL * NSEC_PER_MSEC)
+#define RATE_LIMIT 3
 
-static struct hrtimer hr_timer;
-static ktime_t ktime;
-static int count = 0;
+static unsigned int count = 0;
+static unsigned int rate_count = 0;
+static int cpu = -1;
 
-enum hrtimer_restart hrtimer_handler(struct hrtimer *timer)
+static inline void do_hypercall(unsigned int hypercall_nr, int payload)
 {
-	trace_vmsync_guest(count++);
 	// FIXME: should use kvm_x86_ops
-	asm volatile(".byte 0x0F,0x01,0xC1\n"::"a"(VMSYNC_HYPERCALL_NR), "b"(count));
+	asm volatile(".byte 0x0F,0x01,0xC1\n"::"a"(hypercall_nr), "b"(payload));
+}
 
-	hrtimer_forward_now(&hr_timer, ns_to_ktime(VMSYNC_HRTIMER_INTERVAL));
-	return HRTIMER_RESTART;
+static void softirq_exit_handler(unsigned int vec_nr)
+{
+	// FIXME find a better way of doing this please!
+	if(cpu != smp_processor_id()) {
+			return;
+	}
+
+	// FIXME use kernel rate limit instead of this homemade version
+	rate_count++;
+	count++;
+	if((rate_count % RATE_LIMIT) == 0) {
+		trace_vmsync_gh_guest(count);
+		do_hypercall(VMSYNC_HYPERCALL_NR, count);
+		count++; // because it was incremented in the host as well
+		trace_vmsync_hg_guest(count);
+	}
 }
 
 static int __init lttng_addons_vmsync_init(void)
 {
-	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
-	ktime = ktime_set(0, VMSYNC_HRTIMER_INTERVAL);
-	hrtimer_init(&hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	hr_timer.function = &hrtimer_handler;
-	hrtimer_start(&hr_timer, ktime, HRTIMER_MODE_REL);
+	int ret;
+	count = 0;
+	rate_count = 0;
 
-	printk(VMSYNC_INFO "loaded\n");
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
+	ret = kabi_2635_tracepoint_probe_register("softirq_exit",
+			softirq_exit_handler, NULL);
+	if (ret) {
+			printk(VMSYNC_INFO "tracepoint_probe_register softirq_exit failed\n");
+			return -1;
+	}
+
+	cpu = smp_processor_id();
+
+	printk(VMSYNC_INFO "loaded on cpu %d\n", cpu);
 	return 0;
 }
 module_init(lttng_addons_vmsync_init);
 
 static void __exit lttng_addons_vmsync_exit(void)
 {
-	hrtimer_cancel(&hr_timer);
+	kabi_2635_tracepoint_probe_unregister("softirq_exit",
+			softirq_exit_handler, NULL);
+
+	/*
+	 * make sure any currently running probe
+	 * has finished before freeing memory
+	 */
+	synchronize_sched();
 	printk(VMSYNC_INFO "removed count=%d\n", count);
 }
 module_exit(lttng_addons_vmsync_exit);
 
 MODULE_LICENSE("GPL and additional rights");
-MODULE_AUTHOR("Mohamad Gebai <mohamad.gebai@gmail.com>");
-MODULE_DESCRIPTION("LTTng VM trace synchronization");
+MODULE_AUTHOR("Mohamad Gebai <mohamad.gebai@polymtl.ca>");
+MODULE_DESCRIPTION("LTTng vmsync guest events");

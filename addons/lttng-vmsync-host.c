@@ -24,6 +24,8 @@
 #include <linux/printk.h>
 #include <asm/ptrace.h>
 
+#include <linux/list.h>
+
 #include "../wrapper/tracepoint.h"
 #include "../wrapper/kallsyms.h"
 #include "../lttng-abi.h"
@@ -31,13 +33,87 @@
 
 #include "lttng-vmsync.h"
 
-DEFINE_TRACE(vmsync_host);
+DEFINE_TRACE(vmsync_gh_host);
+DEFINE_TRACE(vmsync_hg_host);
+
+static LIST_HEAD(nodes_list);
+
+struct sync_node {
+	u8 in_sync;
+	u64 counter;
+	pid_t pid;
+	struct list_head list;
+};
+
+
+static void free_list(void)
+{
+	struct sync_node *node;
+
+redo:
+	list_for_each_entry(node, &nodes_list, list) {
+		list_del(&node->list);
+		kfree(node);
+		goto redo;
+	}
+}
+
+static struct sync_node *find(pid_t pid)
+{
+	struct sync_node *node;
+
+	list_for_each_entry(node, &nodes_list, list) {
+		if(node->pid == pid) {
+			return node;
+		}
+	}
+	return NULL;
+}
+
+static struct sync_node *find_or_add(pid_t pid)
+{
+	struct sync_node *node = find(pid);
+
+	if (node) {
+		return node;
+	}
+
+	node = kmalloc(sizeof(struct sync_node), GFP_KERNEL);
+	node->pid = pid;
+	node->counter = 0;
+	node->in_sync = 0;
+	INIT_LIST_HEAD(&node->list);
+
+	list_add(&node->list, &nodes_list);
+	return node;
+}
 
 static void kvm_hypercall_handler(void *__data, unsigned long nr,
 		unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3)
 {
-	if (nr == VMSYNC_HYPERCALL_NR)
-		trace_vmsync_host(a0);
+	struct sync_node *node;
+
+	if (nr == VMSYNC_HYPERCALL_NR) {
+		node = find_or_add(current->pid);
+		node->counter = a0;
+		trace_vmsync_gh_host(node->counter);
+		node->in_sync = 1;
+	}
+}
+
+static void kvm_entry_handler(unsigned int vcpu_id)
+{
+	struct sync_node *node = find(current->pid);
+
+	if(!node) {
+		return;
+	}
+
+	if(node->in_sync == 1) {
+		node->counter++; // the guest knows about this. It is incrementing it as well
+		trace_vmsync_hg_host(node->counter);
+		node->in_sync = 0;
+	}
 }
 
 static int __init lttng_addons_vmsync_init(void)
@@ -48,9 +124,17 @@ static int __init lttng_addons_vmsync_init(void)
 	ret = kabi_2635_tracepoint_probe_register("kvm_hypercall",
 			kvm_hypercall_handler, NULL);
 	if (ret) {
-		printk(VMSYNC_INFO "tracepoint_probe_register failed\n");
+		printk(VMSYNC_INFO "tracepoint_probe_register kvm_hypercall failed\n");
 		return -1;
 	}
+
+	ret = kabi_2635_tracepoint_probe_register("kvm_entry",
+			kvm_entry_handler, NULL);
+	if (ret) {
+		printk(VMSYNC_INFO "tracepoint_probe_register kvm_entry failed\n");
+		return -1;
+	}
+
 	printk(VMSYNC_INFO "loaded\n");
 	return 0;
 }
@@ -61,15 +145,19 @@ static void __exit lttng_addons_vmsync_exit(void)
 
 	kabi_2635_tracepoint_probe_unregister("kvm_hypercall",
 			kvm_hypercall_handler, NULL);
+	kabi_2635_tracepoint_probe_unregister("kvm_entry",
+			kvm_entry_handler, NULL);
 	/*
 	 * make sure any currently running probe
 	 * has finished before freeing memory
 	 */
 	synchronize_sched();
+	free_list();
 	printk(VMSYNC_INFO "removed\n");
 }
 module_exit(lttng_addons_vmsync_exit);
 
 MODULE_LICENSE("GPL and additional rights");
-MODULE_AUTHOR("Francis Giraldeau <francis.giraldeau@gmail.com>");
-MODULE_DESCRIPTION("LTTng syscall events");
+MODULE_AUTHOR("Mohamad Gebai <mohamad.gebai@polymtl.ca>"
+		"Francis Giraldeau <francis.giraldeau@gmail.com>");
+MODULE_DESCRIPTION("LTTng vmsync host events");

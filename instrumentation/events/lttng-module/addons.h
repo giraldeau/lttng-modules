@@ -233,7 +233,7 @@ TRACE_EVENT(sched_ttwu,
 	TP_printk("%d", __entry->tid)
 )
 
-TRACE_EVENT(vmsync_guest,
+TRACE_EVENT(vmsync_gh_guest,
 	TP_PROTO(unsigned int cnt),
 	TP_ARGS(cnt),
 	TP_STRUCT__entry(
@@ -245,7 +245,7 @@ TRACE_EVENT(vmsync_guest,
 	TP_printk("%u", __entry->cnt)
 )
 
-TRACE_EVENT(vmsync_host,
+TRACE_EVENT(vmsync_gh_host,
 	TP_PROTO(unsigned int cnt),
 	TP_ARGS(cnt),
 	TP_STRUCT__entry(
@@ -255,6 +255,30 @@ TRACE_EVENT(vmsync_host,
 		tp_assign(cnt, cnt)
 	),
 	TP_printk("%u", __entry->cnt)
+)
+
+TRACE_EVENT(vmsync_hg_guest,
+		TP_PROTO(unsigned int cnt),
+		TP_ARGS(cnt),
+		TP_STRUCT__entry(
+			__field(unsigned int, cnt)
+			),
+		TP_fast_assign(
+			tp_assign(cnt, cnt)
+			),
+		TP_printk("%u", __entry->cnt)
+		)
+
+TRACE_EVENT(vmsync_hg_host,
+		TP_PROTO(unsigned int cnt),
+		TP_ARGS(cnt),
+		TP_STRUCT__entry(
+			__field(unsigned int, cnt)
+			),
+		TP_fast_assign(
+			tp_assign(cnt, cnt)
+			),
+		TP_printk("%u", __entry->cnt)
 )
 
 #endif /* LTTNG_NET_H_ */
