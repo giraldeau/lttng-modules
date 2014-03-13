@@ -12,7 +12,7 @@ load_modules() {
 	sudo modprobe lttng-probe-addons
 	sudo modprobe lttng-addons
 	sudo modprobe lttng-syscall-entry
-	sudo modprobe lttng-mmap
+	#sudo modprobe lttng-mmap
 	sudo modprobe lttng-ttwu
 }
 
@@ -22,7 +22,7 @@ unload_modules() {
 	sudo rmmod lttng-ttwu
 	sudo rmmod lttng-addons
 	sudo rmmod lttng-syscall-entry
-	sudo rmmod lttng-mmap
+	#sudo rmmod lttng-mmap
 	sudo rmmod lttng-modsign
 }
 
