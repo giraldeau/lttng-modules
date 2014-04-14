@@ -52,8 +52,10 @@ DEFINE_TRACE(inet_sock_local_out);
 
 extern struct inet_hashinfo tcp_hashinfo;
 
-unsigned int nf_hookfn_inet_local_in(unsigned int hooknum, struct sk_buff *skb,
-		const struct net_device *in, const struct net_device *out,
+unsigned int nf_hookfn_inet_local_in(const struct nf_hook_ops *ops,
+		struct sk_buff *skb,
+		const struct net_device *in,
+		const struct net_device *out,
 		int (*okfn)(struct sk_buff *))
 {
 	struct tcphdr *tcph;
@@ -69,8 +71,10 @@ unsigned int nf_hookfn_inet_local_in(unsigned int hooknum, struct sk_buff *skb,
 	return NF_ACCEPT;
 }
 
-unsigned int nf_hookfn_inet_local_out(unsigned int hooknum, struct sk_buff *skb,
-		const struct net_device *in, const struct net_device *out,
+unsigned int nf_hookfn_inet_local_out(const struct nf_hook_ops *ops,
+		struct sk_buff *skb,
+		const struct net_device *in,
+		const struct net_device *out,
 		int (*okfn)(struct sk_buff *))
 {
 	struct tcphdr *tcph;
