@@ -73,6 +73,7 @@ static int __init lttng_addons_ttwu_init(void)
 {
 	int ret;
 
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	if (ret < 0) {
 		printk("tracepoint_probe_register failed, returned %d\n", ret);
@@ -107,6 +108,7 @@ static int __init lttng_addons_ttwu_init(void)
 {
 	int ret;
 
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_TP, ttwu_probe, NULL);
 	if (ret) {
 		printk("Failed to register probe, returned %d\n", ret);

@@ -43,6 +43,8 @@ static void kvm_hypercall_handler(void *__data, unsigned long nr,
 static int __init lttng_addons_vmsync_init(void)
 {
 	int ret;
+
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	ret = kabi_2635_tracepoint_probe_register("kvm_hypercall",
 			kvm_hypercall_handler, NULL);
 	if (ret) {

@@ -26,6 +26,7 @@
 #include <linux/time.h>
 
 #include "lttng-packet.h"
+#include "../wrapper/tracepoint.h"
 #include "../lttng-abi.h"
 #include "../instrumentation/events/lttng-module/addons.h"
 
@@ -51,6 +52,7 @@ enum hrtimer_restart hrtimer_handler(struct hrtimer *timer)
 
 static int __init lttng_addons_vmsync_init(void)
 {
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	ktime = ktime_set(0, VMSYNC_HRTIMER_INTERVAL);
 	hrtimer_init(&hr_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	hr_timer.function = &hrtimer_handler;

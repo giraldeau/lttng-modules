@@ -120,6 +120,7 @@ static int __init lttng_addons_syscall_init(void)
 {
 	int ret;
 
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	save_func = (void *)kallsyms_lookup_funcptr("save_stack_trace_user");
 	if (!save_func)
 		return -EINVAL;

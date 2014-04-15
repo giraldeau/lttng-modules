@@ -37,6 +37,7 @@
 #include <net/inet_hashtables.h>
 
 #include "lttng-packet.h"
+#include "../wrapper/tracepoint.h"
 #include "../lttng-abi.h"
 #include "../instrumentation/events/lttng-module/addons.h"
 
@@ -248,6 +249,7 @@ static int __init lttng_addons_net_init(void)
 {
 	int ret;
 
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	tcp_sock_override_destruct(inet_sock_destruct, inet_sock_destruct_hook);
 
 	ret = install_hook("IPv4", &inet_family_ops, &hooked_inet_family_ops);
