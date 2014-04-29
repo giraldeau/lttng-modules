@@ -24,6 +24,7 @@
 #include <linux/printk.h>
 #include <linux/sched.h>
 #include <linux/kprobes.h>
+#include <linux/spinlock.h>
 
 #include "../wrapper/tracepoint.h"
 #include "../lttng-abi.h"
@@ -57,7 +58,19 @@ static void ttwu_probe(void *__data, struct task_struct *p, int success)
 static int
 ttwu_jprobe_handler(struct task_struct *p, unsigned int state, int wake_flags)
 {
+	unsigned long flags;
+	/*
+	 * Check if state is about to change (avoid recording spurious wakeup)
+	 * Use the same memory barrier than original function to compare p->state
+	 */
+	smp_mb__before_spinlock();
+	raw_spin_lock_irqsave(&p->pi_lock, flags);
+	if (!(p->state & state))
+		goto out;
+
 	trace_sched_ttwu(p->pid);
+out:
+	raw_spin_unlock_irqrestore(&p->pi_lock, flags);
 	jprobe_return();
 	return 0;
 }
