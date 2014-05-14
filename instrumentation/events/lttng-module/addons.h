@@ -123,7 +123,7 @@ TRACE_EVENT(inet_sock_local_in,
 #if defined(__LITTLE_ENDIAN_BITFIELD)
 		tp_assign(flags, (tcph->cwr << 15) + (tcph->ece << 14) + (tcph->urg << 13) +
 				(tcph->ack << 12) + (tcph->psh << 11) + (tcph->rst << 10) +
-				(tcph->syn << 9) + (tcph->cwr << 8)  + (tcph->doff << 4) + (tcph->res1) )
+				(tcph->syn << 9) + (tcph->fin << 8)  + (tcph->doff << 4) + (tcph->res1) )
 #elif defined(__BIG_ENDIAN_BITFIELD)
 		tp_assign(flags, (tcph->doff << 12) + (tcph->res1 << 8) + (tcph->cwr << 7) +
 				(tcph->ece << 6) + (tcph->urg << 5) + (tcph->ack << 4) + (tcph->psh << 3) +
