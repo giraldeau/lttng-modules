@@ -82,6 +82,24 @@ static struct jprobe ttwu_jprobe = {
 		},
 };
 
+/* static
+ * void try_to_wake_up_local(struct task_struct *p)
+ */
+static int
+ttwu_local_jprobe_handler(struct task_struct *p)
+{
+	trace_sched_ttwu(p->pid);
+	jprobe_return();
+	return 0;
+}
+
+static struct jprobe ttwu_local_jprobe = {
+		.entry = ttwu_local_jprobe_handler,
+		.kp = {
+			.symbol_name = "try_to_wake_up_local",
+		},
+};
+
 static int __init lttng_addons_ttwu_init(void)
 {
 	int ret;
@@ -95,14 +113,21 @@ static int __init lttng_addons_ttwu_init(void)
 	ret = register_jprobe(&ttwu_jprobe);
 	if (ret < 0) {
 		printk("register_jprobe failed, returned %d\n", ret);
-		goto err;
+		goto err_ttwu;
+	}
+	ret = register_jprobe(&ttwu_local_jprobe);
+	if (ret < 0) {
+		printk("register_jprobe failed, returned %d\n", ret);
+		goto err_ttwu_local;
 	}
 
 	printk("lttng-ttwu loaded (kprobe)\n");
 out:
 	return ret;
-err:
+err_ttwu:
 	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+err_ttwu_local:
+	unregister_jprobe(&ttwu_jprobe);
 	goto out;
 }
 module_init(lttng_addons_ttwu_init);
