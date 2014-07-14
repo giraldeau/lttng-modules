@@ -124,10 +124,10 @@ static int __init lttng_addons_ttwu_init(void)
 	printk("lttng-ttwu loaded (kprobe)\n");
 out:
 	return ret;
-err_ttwu:
-	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 err_ttwu_local:
 	unregister_jprobe(&ttwu_jprobe);
+err_ttwu:
+	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	goto out;
 }
 module_init(lttng_addons_ttwu_init);
@@ -136,6 +136,7 @@ static void __exit lttng_addons_ttwu_exit(void)
 {
 	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	unregister_jprobe(&ttwu_jprobe);
+	unregister_jprobe(&ttwu_local_jprobe);
 	printk("lttng-ttwu removed\n");
 }
 module_exit(lttng_addons_ttwu_exit);
