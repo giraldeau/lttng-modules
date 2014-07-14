@@ -8,7 +8,6 @@ fi
 
 load_modules() {
 	echo "loading lttng-addons"
-	sudo modprobe lttng-modsign
 	sudo modprobe lttng-probe-addons
 	sudo modprobe lttng-addons
 	sudo modprobe lttng-syscall-entry
@@ -23,7 +22,6 @@ unload_modules() {
 	sudo rmmod lttng-addons
 	sudo rmmod lttng-syscall-entry
 	#sudo rmmod lttng-mmap
-	sudo rmmod lttng-modsign
 }
 
 reload_modules() {
