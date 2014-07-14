@@ -39,7 +39,7 @@ obj-m +=  $(shell \
 
 ifneq ($(CONFIG_BLOCK),)
 ifneq ($(CONFIG_EVENT_TRACING),)	# need blk_cmd_buf_len
-obj-m += lttng-probe-block.o
+#obj-m += lttng-probe-block.o
 endif
 endif
 
