@@ -25,7 +25,6 @@
 #include <linux/hrtimer.h>
 #include <linux/time.h>
 
-#include "lttng-packet.h"
 #include "../wrapper/tracepoint.h"
 #include "../lttng-abi.h"
 #include "../instrumentation/events/lttng-module/addons.h"

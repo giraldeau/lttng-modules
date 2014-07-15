@@ -27,7 +27,6 @@ lttng-tracer-objs :=  lttng-events.o lttng-abi.o \
 obj-m += lttng-statedump.o
 lttng-statedump-objs := lttng-statedump-impl.o wrapper/irqdesc.o \
 			wrapper/fdtable.o
-lttng-statedump-defsyms = socket_file_ops
 
 ifneq ($(CONFIG_HAVE_SYSCALL_TRACEPOINTS),)
 lttng-tracer-objs += lttng-syscalls.o probes/lttng-probe-user.o
@@ -47,14 +46,6 @@ lttng-tracer-objs += $(shell \
 obj-m += probes/
 obj-m += lib/
 obj-m += addons/
-
-include $(src)/defsyms.mk
-
-#KBUILD_EXTRA_SYMBOLS += $(src)/defsyms.symvers
-#LDFLAGS_MODULE += -T $(src)/lttng-net.defsyms
-
-# FIXME: the file is not cleaned
-#clean-files := addons/lttng-addons.defsyms
 
 endif # CONFIG_TRACEPOINTS
 

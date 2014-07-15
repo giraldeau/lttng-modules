@@ -76,7 +76,3 @@ GTAGS
 *.orig
 *~
 \#*#
-
-# defsyms.mk generated files
-*.defsyms
-*.symvers

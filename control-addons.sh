@@ -9,7 +9,7 @@ fi
 load_modules() {
 	echo "loading lttng-addons"
 	sudo modprobe lttng-probe-addons
-	sudo modprobe lttng-addons
+	sudo modprobe lttng-packet
 	sudo modprobe lttng-syscall-entry
 	#sudo modprobe lttng-mmap
 	sudo modprobe lttng-ttwu

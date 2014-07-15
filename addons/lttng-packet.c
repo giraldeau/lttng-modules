@@ -28,8 +28,8 @@
 #include <linux/ip.h>
 #include <net/inet_hashtables.h>
 
+#include "../wrapper/tracepoint.h"
 #include "../instrumentation/events/lttng-module/addons.h"
-#include "lttng-packet.h"
 
 DEFINE_TRACE(inet_sock_local_in);
 DEFINE_TRACE(inet_sock_local_out);
@@ -132,3 +132,37 @@ void nfhook_exit(void)
 	printk("nfhook exit\n");
 	return;
 }
+
+static int __init lttng_addons_packet_init(void)
+{
+	int ret;
+
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
+
+	ret = nfhook_init();
+	if (ret < 0) {
+		printk(KERN_INFO "Error loading nfhook %d\n", ret);
+		goto error;
+	}
+
+	printk("lttng_addons_packet loaded\n");
+	return 0;
+
+error:
+	nfhook_exit();
+	return ret;
+}
+
+static void __exit lttng_addons_packet_exit(void)
+{
+	nfhook_exit();
+	printk("lttng_addons_packet unloaded\n");
+	return;
+}
+
+module_init(lttng_addons_packet_init);
+module_exit(lttng_addons_packet_exit);
+
+MODULE_LICENSE("GPL and additional rights");
+MODULE_AUTHOR("Francis Giraldeau <francis.giraldeau@gmail.com>");
+MODULE_DESCRIPTION("LTTng network tracer");
