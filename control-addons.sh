@@ -19,7 +19,7 @@ unload_modules() {
 	echo "unloading lttng-addons"
 	sudo rmmod lttng-probe-addons
 	sudo rmmod lttng-ttwu
-	sudo rmmod lttng-addons
+	sudo rmmod lttng-packet
 	sudo rmmod lttng-syscall-entry
 	#sudo rmmod lttng-mmap
 }
