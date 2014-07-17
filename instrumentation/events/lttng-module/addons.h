@@ -25,17 +25,7 @@ TRACE_EVENT(inet_sock_local_in,
 		tp_assign(ack_seq, tcph->ack_seq)
 		tp_assign(check, tcph->check)
 		tp_assign(window, tcph->window)
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-		tp_assign(flags, (tcph->cwr << 15) + (tcph->ece << 14) + (tcph->urg << 13) +
-				(tcph->ack << 12) + (tcph->psh << 11) + (tcph->rst << 10) +
-				(tcph->syn << 9) + (tcph->fin << 8)  + (tcph->doff << 4) + (tcph->res1) )
-#elif defined(__BIG_ENDIAN_BITFIELD)
-		tp_assign(flags, (tcph->doff << 12) + (tcph->res1 << 8) + (tcph->cwr << 7) +
-				(tcph->ece << 6) + (tcph->urg << 5) + (tcph->ack << 4) + (tcph->psh << 3) +
-				(tcph->rst << 2) + (tcph->syn << 1) + (tcph->fin) )
-#else
-#error "Adjust your <asm/byteorder.h> defines"
-#endif
+		tp_assign(flags, *(((uint16_t *)tcph) + 6)) // flags are in network order
 	),
 	TP_printk("%p %x %x %x %x %x", __entry->sk, __entry->seq, __entry->ack_seq,
 			__entry->check, __entry->window, __entry->flags)
@@ -58,17 +48,7 @@ TRACE_EVENT(inet_sock_local_out,
 		tp_assign(ack_seq, tcph->ack_seq)
 		tp_assign(check, tcph->check)
 		tp_assign(window, tcph->window)
-#if defined(__LITTLE_ENDIAN_BITFIELD)
-		tp_assign(flags, (tcph->cwr << 15) + (tcph->ece << 14) + (tcph->urg << 13) +
-				(tcph->ack << 12) + (tcph->psh << 11) + (tcph->rst << 10) +
-				(tcph->syn << 9) + (tcph->fin << 8)  + (tcph->doff << 4) + (tcph->res1) )
-#elif defined(__BIG_ENDIAN_BITFIELD)
-			tp_assign(flags, (tcph->doff << 12) + (tcph->res1 << 8) + (tcph->cwr << 7) +
-				(tcph->ece << 6) + (tcph->urg << 5) + (tcph->ack << 4) + (tcph->psh << 3) +
-				(tcph->rst << 2) + (tcph->syn << 1) + (tcph->fin) )
-#else
-#error "Adjust your <asm/byteorder.h> defines"
-#endif
+		tp_assign(flags, *(((uint16_t *)tcph) + 6)) // flags are in network order
 	),
 	TP_printk("%p %x %x %x %x %x", __entry->sk, __entry->seq, __entry->ack_seq,
 			__entry->check, __entry->window, __entry->flags)
