@@ -233,8 +233,6 @@ struct socket *sock_from_file(struct file *file, int *err)
 static
 int lttng_dump_one_fd(const void *p, struct file *file, unsigned int fd)
 {
-	int err;
-	struct socket *sock;
 	const struct lttng_fd_ctx *ctx = p;
 	const char *s = d_path(&file->f_path, ctx->page, PAGE_SIZE);
 	unsigned int flags = file->f_flags;
