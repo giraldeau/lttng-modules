@@ -14,7 +14,7 @@ obj-m += lttng-syscall-entry.o
 obj-m += lttng-vmsync-guest.o
 obj-m += lttng-vmsync-host.o
 obj-m += lttng-packet.o
-
+obj-m += lttng-stacktrace.o
 
 endif
 

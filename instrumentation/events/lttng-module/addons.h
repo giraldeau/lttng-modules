@@ -5,6 +5,7 @@
 #define LTTNG_NET_H_
 
 #include <linux/tracepoint.h>
+#include <linux/stacktrace.h>
 #include <net/sock.h>
 #include <linux/tcp.h>
 
@@ -75,16 +76,16 @@ TRACE_EVENT(sys_entry_callsite,
 	TP_STRUCT__entry(
 		__field(short, id)
 		__dynamic_array_hex(unsigned long, callsite, ({
-			extern int stack_trace_get_size(void);
-			int x = stack_trace_get_size();
+			extern int lttng_stack_trace_get_size(void);
+			int x = lttng_stack_trace_get_size();
 			x;
 		}))
 	),
 	TP_fast_assign(
 		tp_assign(id, id)
 		tp_memcpy_dyn(callsite, ({
-			extern unsigned long *stack_trace_get_entries(void);
-			unsigned long *entries = stack_trace_get_entries();
+			extern unsigned long *lttng_stack_trace_get_entries(void);
+			unsigned long *entries = lttng_stack_trace_get_entries();
 			entries;
 		}))
 	),

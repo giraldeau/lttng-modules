@@ -73,7 +73,7 @@ static int __init lttng_addons_vmsync_init(void)
 	rate_count = 0;
 
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
-	ret = kabi_2635_tracepoint_probe_register("softirq_exit",
+	ret = lttng_wrapper_tracepoint_probe_register("softirq_exit",
 			softirq_exit_handler, NULL);
 	if (ret) {
 			printk(VMSYNC_INFO "tracepoint_probe_register softirq_exit failed\n");
@@ -89,7 +89,7 @@ module_init(lttng_addons_vmsync_init);
 
 static void __exit lttng_addons_vmsync_exit(void)
 {
-	kabi_2635_tracepoint_probe_unregister("softirq_exit",
+	lttng_wrapper_tracepoint_probe_unregister("softirq_exit",
 			softirq_exit_handler, NULL);
 
 	/*

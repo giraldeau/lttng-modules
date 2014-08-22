@@ -121,14 +121,14 @@ static int __init lttng_addons_vmsync_init(void)
 	int ret;
 
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
-	ret = kabi_2635_tracepoint_probe_register("kvm_hypercall",
+	ret = lttng_wrapper_tracepoint_probe_register("kvm_hypercall",
 			kvm_hypercall_handler, NULL);
 	if (ret) {
 		printk(VMSYNC_INFO "tracepoint_probe_register kvm_hypercall failed\n");
 		return -1;
 	}
 
-	ret = kabi_2635_tracepoint_probe_register("kvm_entry",
+	ret = lttng_wrapper_tracepoint_probe_register("kvm_entry",
 			kvm_entry_handler, NULL);
 	if (ret) {
 		printk(VMSYNC_INFO "tracepoint_probe_register kvm_entry failed\n");
@@ -143,9 +143,9 @@ module_init(lttng_addons_vmsync_init);
 static void __exit lttng_addons_vmsync_exit(void)
 {
 
-	kabi_2635_tracepoint_probe_unregister("kvm_hypercall",
+	lttng_wrapper_tracepoint_probe_unregister("kvm_hypercall",
 			kvm_hypercall_handler, NULL);
-	kabi_2635_tracepoint_probe_unregister("kvm_entry",
+	lttng_wrapper_tracepoint_probe_unregister("kvm_entry",
 			kvm_entry_handler, NULL);
 	/*
 	 * make sure any currently running probe

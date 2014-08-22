@@ -87,7 +87,7 @@ static int __init lttng_addons_ttwu_init(void)
 	int ret;
 
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
-	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	ret = lttng_wrapper_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	if (ret < 0) {
 		printk("tracepoint_probe_register failed, returned %d\n", ret);
 		goto out;
@@ -102,14 +102,14 @@ static int __init lttng_addons_ttwu_init(void)
 out:
 	return ret;
 err:
-	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	goto out;
 }
 module_init(lttng_addons_ttwu_init);
 
 static void __exit lttng_addons_ttwu_exit(void)
 {
-	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	unregister_jprobe(&ttwu_jprobe);
 	printk("lttng-ttwu removed\n");
 }
@@ -122,11 +122,11 @@ static int __init lttng_addons_ttwu_init(void)
 	int ret;
 
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
-	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_TP, ttwu_probe, NULL);
+	ret = lttng_wrapper_tracepoint_probe_register(SCHED_WAKEUP_TP, ttwu_probe, NULL);
 	if (ret) {
 		printk("Failed to register probe, returned %d\n", ret);
 	}
-	ret = kabi_2635_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	ret = lttng_wrapper_tracepoint_probe_register(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	if (ret) {
 		printk("Failed to register probe, returned %d\n", ret);
 		goto err;
@@ -134,15 +134,15 @@ static int __init lttng_addons_ttwu_init(void)
 	printk("lttng-ttwu loaded (tracepoint)\n");
 	return 0;
 err:
-	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	return -1;
 }
 module_init(lttng_addons_ttwu_init);
 
 static void __exit lttng_addons_ttwu_exit(void)
 {
-	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_TP, ttwu_probe, NULL);
-	kabi_2635_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(SCHED_WAKEUP_TP, ttwu_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(SCHED_WAKEUP_NEW_TP, ttwu_probe, NULL);
 	printk("lttng-ttwu removed\n");
 }
 module_exit(lttng_addons_ttwu_exit);
