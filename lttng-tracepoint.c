@@ -200,6 +200,7 @@ end:
 	mutex_unlock(&lttng_tracepoint_mutex);
 	return ret;
 }
+EXPORT_SYMBOL(lttng_tracepoint_probe_register);
 
 int lttng_tracepoint_probe_unregister(const char *name, void *probe, void *data)
 {
@@ -227,6 +228,7 @@ end:
 	mutex_unlock(&lttng_tracepoint_mutex);
 	return ret;
 }
+EXPORT_SYMBOL(lttng_tracepoint_probe_unregister);
 
 #ifdef CONFIG_MODULES
 
