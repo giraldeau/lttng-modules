@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/printk.h>
 #include <linux/hrtimer.h>
+#include <linux/random.h>
 #include <linux/time.h>
 
 #include "../wrapper/tracepoint.h"
@@ -40,12 +41,13 @@ DEFINE_TRACE(vmsync_gh_guest);
 
 static unsigned int count = 0;
 static unsigned int rate_count = 0;
+static unsigned long vm_uid = 0;
 static int cpu = -1;
 
-static inline void do_hypercall(unsigned int hypercall_nr, int payload)
+static inline void do_hypercall(unsigned int hypercall_nr, int payload, unsigned long uid)
 {
 	// FIXME: should use kvm_x86_ops
-	asm volatile(".byte 0x0F,0x01,0xC1\n"::"a"(hypercall_nr), "b"(payload));
+	asm volatile(".byte 0x0F,0x01,0xC1\n"::"a"(hypercall_nr), "b"(payload), "c"(uid));
 }
 
 static void softirq_exit_handler(unsigned int vec_nr)
@@ -59,10 +61,10 @@ static void softirq_exit_handler(unsigned int vec_nr)
 	rate_count++;
 	count++;
 	if((rate_count % RATE_LIMIT) == 0) {
-		trace_vmsync_gh_guest(count);
-		do_hypercall(VMSYNC_HYPERCALL_NR, count);
+		trace_vmsync_gh_guest(count, vm_uid);
+		do_hypercall(VMSYNC_HYPERCALL_NR, count, vm_uid);
 		count++; // because it was incremented in the host as well
-		trace_vmsync_hg_guest(count);
+		trace_vmsync_hg_guest(count, vm_uid);
 	}
 }
 
@@ -71,6 +73,8 @@ static int __init lttng_addons_vmsync_init(void)
 	int ret;
 	count = 0;
 	rate_count = 0;
+
+	get_random_bytes(&vm_uid, sizeof(vm_uid));
 
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
 	ret = lttng_wrapper_tracepoint_probe_register("softirq_exit",
@@ -82,7 +86,7 @@ static int __init lttng_addons_vmsync_init(void)
 
 	cpu = smp_processor_id();
 
-	printk(VMSYNC_INFO "loaded on cpu %d\n", cpu);
+	printk(VMSYNC_INFO "loaded on cpu %d with vm_uid %lu\n", cpu, vm_uid);
 	return 0;
 }
 module_init(lttng_addons_vmsync_init);
@@ -97,7 +101,7 @@ static void __exit lttng_addons_vmsync_exit(void)
 	 * has finished before freeing memory
 	 */
 	synchronize_sched();
-	printk(VMSYNC_INFO "removed count=%d\n", count);
+	printk(VMSYNC_INFO "removed count=%d for vm_uid %lu\n", count, vm_uid);
 }
 module_exit(lttng_addons_vmsync_exit);
 

@@ -41,6 +41,7 @@ static LIST_HEAD(nodes_list);
 struct sync_node {
 	u8 in_sync;
 	u64 counter;
+	unsigned long vm_uid;
 	pid_t pid;
 	struct list_head list;
 };
@@ -96,7 +97,8 @@ static void kvm_hypercall_handler(void *__data, unsigned long nr,
 	if (nr == VMSYNC_HYPERCALL_NR) {
 		node = find_or_add(current->pid);
 		node->counter = a0;
-		trace_vmsync_gh_host(node->counter);
+		node->vm_uid = a1;
+		trace_vmsync_gh_host(node->counter, node->vm_uid);
 		node->in_sync = 1;
 	}
 }
@@ -111,7 +113,7 @@ static void kvm_entry_handler(unsigned int vcpu_id)
 
 	if(node->in_sync == 1) {
 		node->counter++; // the guest knows about this. It is incrementing it as well
-		trace_vmsync_hg_host(node->counter);
+		trace_vmsync_hg_host(node->counter, node->vm_uid);
 		node->in_sync = 0;
 	}
 }

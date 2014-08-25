@@ -105,51 +105,59 @@ TRACE_EVENT(sched_ttwu,
 )
 
 TRACE_EVENT(vmsync_gh_guest,
-	TP_PROTO(unsigned int cnt),
-	TP_ARGS(cnt),
+	TP_PROTO(unsigned int cnt, unsigned long vm_uid),
+	TP_ARGS(cnt, vm_uid),
 	TP_STRUCT__entry(
 		__field(unsigned int, cnt)
+		__field(unsigned long, vm_uid)
 	),
 	TP_fast_assign(
 		tp_assign(cnt, cnt)
+		tp_assign(vm_uid, vm_uid)
 	),
-	TP_printk("%u", __entry->cnt)
+	TP_printk("%u %lu", __entry->cnt, __entry->vm_uid)
 )
 
 TRACE_EVENT(vmsync_gh_host,
-	TP_PROTO(unsigned int cnt),
-	TP_ARGS(cnt),
+	TP_PROTO(unsigned int cnt, unsigned long vm_uid),
+	TP_ARGS(cnt, vm_uid),
 	TP_STRUCT__entry(
 		__field(unsigned int, cnt)
+		__field(unsigned long, vm_uid)
 	),
 	TP_fast_assign(
 		tp_assign(cnt, cnt)
+		tp_assign(vm_uid, vm_uid)
 	),
-	TP_printk("%u", __entry->cnt)
+	TP_printk("%u %lu", __entry->cnt, __entry->vm_uid)
 )
 
 TRACE_EVENT(vmsync_hg_guest,
-		TP_PROTO(unsigned int cnt),
-		TP_ARGS(cnt),
-		TP_STRUCT__entry(
-			__field(unsigned int, cnt)
-			),
-		TP_fast_assign(
-			tp_assign(cnt, cnt)
-			),
-		TP_printk("%u", __entry->cnt)
-		)
+	TP_PROTO(unsigned int cnt, unsigned long vm_uid),
+	TP_ARGS(cnt, vm_uid),
+	TP_STRUCT__entry(
+		__field(unsigned int, cnt)
+		__field(unsigned long, vm_uid)
+	),
+	TP_fast_assign(
+		tp_assign(cnt, cnt)
+		tp_assign(vm_uid, vm_uid)
+	),
+	TP_printk("%u %lu", __entry->cnt, __entry->vm_uid)
+)
 
 TRACE_EVENT(vmsync_hg_host,
-		TP_PROTO(unsigned int cnt),
-		TP_ARGS(cnt),
+		TP_PROTO(unsigned int cnt, unsigned long vm_uid),
+		TP_ARGS(cnt, vm_uid),
 		TP_STRUCT__entry(
 			__field(unsigned int, cnt)
+			__field(unsigned long, vm_uid)
 			),
 		TP_fast_assign(
 			tp_assign(cnt, cnt)
+			tp_assign(vm_uid, vm_uid)
 			),
-		TP_printk("%u", __entry->cnt)
+		TP_printk("%u %lu", __entry->cnt, __entry->vm_uid)
 )
 
 #endif /* LTTNG_NET_H_ */
