@@ -164,8 +164,6 @@ struct lttng_ctx_field {
 		struct lttng_perf_counter_field *perf_counter;
 	} u;
 	void (*destroy)(struct lttng_ctx_field *field);
-	/* private data to keep state between get_size and record */
-	void *private;
 };
 
 struct lttng_ctx {
