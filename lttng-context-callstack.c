@@ -193,6 +193,7 @@ int cs_data_init(struct cs_def *def)
 	struct stack_trace *item;
 
 	mutex_lock(&cs_table_mutex);
+	printk("CALLSTACK refcount=%d\n", def->ref.refcount.counter);
 	if (kref_get_unless_zero(&def->ref)) {
 		/* refcount >= 1 means the structure is already ready */
 		mutex_unlock(&cs_table_mutex);
@@ -209,6 +210,7 @@ int cs_data_init(struct cs_def *def)
 			return -EINVAL;
 		}
 	}
+	printk("CALLSTACK OK save_func %s\n", def->save_func_name);
 
 	/* alloc stack_trace data */
 	def->items = alloc_percpu(struct cs_set);
@@ -226,6 +228,7 @@ int cs_data_init(struct cs_def *def)
 			item->max_entries = MAX_ENTRIES;
 		}
 	}
+	printk("CALLSTACK PASS alloc entries\n");
 
 	/* initialization completed */
 	kref_init(&def->ref);
