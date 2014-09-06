@@ -119,7 +119,8 @@ struct stack_trace *stack_trace_context(struct cs_def *def, int cpu)
 	 */
 	set = per_cpu_ptr(def->items, cpu);
 	nesting = per_cpu(lib_ring_buffer_nesting, cpu) - 1;
-	if (nesting >= RING_BUFFER_MAX_NESTING) {
+	//if (nesting >= RING_BUFFER_MAX_NESTING) {
+	if (nesting > 0) {
 		return NULL;
 	}
 	return &set->st[nesting];
