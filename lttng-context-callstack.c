@@ -269,8 +269,8 @@ void cs_data_release(struct kref *kref)
 static
 void lttng_callstack_destroy(struct lttng_ctx_field *field)
 {
-	printk("CALLSTACK lttng_callstack_destroy\n");
 	struct cs_def *def = &cs_table[field->u.mode];
+	printk("CALLSTACK lttng_callstack_destroy refcount=%d\n", def->ref.refcount.counter);
 	kref_put_mutex(&def->ref, cs_data_release, &cs_table_mutex);
 }
 
