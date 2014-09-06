@@ -225,6 +225,7 @@ int cs_data_init(struct cs_def *def)
 		for (i = 0; i < RING_BUFFER_MAX_NESTING; i++) {
 			item = &cs->st[i];
 			item->entries = cs->entries_buf + i * MAX_ENTRIES;
+			printk("CALLSTACK cpu=%d nest=%d %p\n", cpu, i, item->entries);
 			item->max_entries = MAX_ENTRIES;
 		}
 	}
