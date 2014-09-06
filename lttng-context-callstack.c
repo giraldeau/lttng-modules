@@ -238,11 +238,13 @@ int cs_data_init(struct cs_def *def)
 error_alloc_entries:
 	for_each_possible_cpu(cpu) {
 		cs = per_cpu_ptr(def->items, cpu);
+		for (i = 0; i < RING_BUFFER_MAX_NESTING; i++) {
+			cs->st[i].entries = NULL;
+		}
 		kfree(cs->entries_buf);
 	}
 error_alloc_items:
 	free_percpu(def->items);
-	def->save_func = NULL;
 	mutex_unlock(&cs_table_mutex);
 	return -ENOMEM;
 }
@@ -253,13 +255,16 @@ error_alloc_items:
 static
 void cs_data_release(struct kref *kref)
 {
-	int cpu;
+	int i, cpu;
 	struct cs_set *cs;
 	struct cs_def *def = container_of(kref, struct cs_def, ref);
 
 	printk("CALLSTACK cs_data_release\n");
 	for_each_possible_cpu(cpu) {
 		cs = per_cpu_ptr(def->items, cpu);
+		for (i = 0; i < RING_BUFFER_MAX_NESTING; i++) {
+			cs->st[i].entries = NULL;
+		}
 		kfree(cs->entries_buf);
 	}
 	free_percpu(def->items);
