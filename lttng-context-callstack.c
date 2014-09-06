@@ -263,6 +263,7 @@ void cs_data_release(struct kref *kref)
 	}
 	free_percpu(def->items);
 	mutex_unlock(&cs_table_mutex);
+	printk("CALLSTACK release\n");
 }
 
 static
