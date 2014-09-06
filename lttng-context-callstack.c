@@ -257,18 +257,19 @@ void cs_data_release(struct kref *kref)
 	struct cs_set *cs;
 	struct cs_def *def = container_of(kref, struct cs_def, ref);
 
+	printk("CALLSTACK cs_data_release\n");
 	for_each_possible_cpu(cpu) {
 		cs = per_cpu_ptr(def->items, cpu);
 		kfree(cs->entries_buf);
 	}
 	free_percpu(def->items);
 	mutex_unlock(&cs_table_mutex);
-	printk("CALLSTACK release\n");
 }
 
 static
 void lttng_callstack_destroy(struct lttng_ctx_field *field)
 {
+	printk("CALLSTACK lttng_callstack_destroy\n");
 	struct cs_def *def = &cs_table[field->u.mode];
 	kref_put_mutex(&def->ref, cs_data_release, &cs_table_mutex);
 }
@@ -288,7 +289,6 @@ int __lttng_add_callstack_generic(struct lttng_ctx **ctx, int mode)
 		ret = -EEXIST;
 		goto error_find;
 	}
-
 	ret = cs_data_init(def);
 	if (ret < 0)
 		goto error_find;
