@@ -86,7 +86,6 @@ struct cs_def {
 	void (*save_func)(struct stack_trace *trace);
 	struct cs_set __percpu *items;
 	struct kref ref;
-	int active;
 };
 
 static struct cs_def cs_table[] = {
@@ -126,6 +125,13 @@ struct stack_trace *stack_trace_context(struct cs_def *def, int cpu)
 	return &set->st[nesting];
 }
 
+/* temp */
+static unsigned long cafe = 0xCAFECAFECAFECAFE;
+struct stack_trace dummy = {
+	.nr_entries = 1,
+	.entries = &cafe,
+};
+
 /*
  * In order to reserve the correct size, the callstack is computed. The
  * resulting callstack is saved to be accessed in the record step.
@@ -139,20 +145,16 @@ size_t lttng_callstack_get_size(size_t offset, struct lttng_ctx_field *field,
 	struct stack_trace *trace;
 	struct cs_def *def = &cs_table[field->u.mode];
 
-	/* sequence length is mandatory */
-	size += lib_ring_buffer_align(offset, lttng_alignof(unsigned int));
-	size += sizeof(unsigned int);
-
-	/* do not write data if no space is available */
 	trace = stack_trace_context(def, ctx->cpu);
 	if (!trace)
-		return size;
-
+		trace = &dummy;
 	/* reset stack trace, no need to clear memory */
 	trace->nr_entries = 0;
-
 	/* do the real work and reserve space */
+	/* sequence length */
 	def->save_func(trace);
+	size += lib_ring_buffer_align(offset, lttng_alignof(unsigned int));
+	size += sizeof(unsigned int);
 	size += lib_ring_buffer_align(offset, lttng_alignof(unsigned long));
 	size += sizeof(unsigned long) * trace->nr_entries;
 	return size;
@@ -163,18 +165,14 @@ void lttng_callstack_record(struct lttng_ctx_field *field,
 			    struct lib_ring_buffer_ctx *ctx,
 			    struct lttng_channel *chan)
 {
-	int zero = 0;
 	struct cs_def *def = &cs_table[field->u.mode];
 	struct stack_trace *trace = stack_trace_context(def, ctx->cpu);
 
+	if (!trace)
+		trace = &dummy;
 	/* write length */
 	lib_ring_buffer_align_ctx(ctx, lttng_alignof(unsigned int));
-	if (!trace) {
-		chan->ops->event_write(ctx, &zero, sizeof(unsigned int));
-		return;
-	}
 	chan->ops->event_write(ctx, &trace->nr_entries, sizeof(unsigned int));
-
 	/* write entries */
 	lib_ring_buffer_align_ctx(ctx, lttng_alignof(unsigned long));
 	chan->ops->event_write(ctx, trace->entries,
