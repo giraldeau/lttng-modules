@@ -33,19 +33,16 @@ DEFINE_TRACE(netif_receive_skb_filter);
 unsigned int filter_dev_probe_handler(void* __data, struct sk_buff *skb)
 {
     char dev_name[] = "lo";
-	struct net_device *dev;
+    struct net_device *dev;
     void *unsafe_ptr = (void *) (long) &skb->dev;
     void *ptr = NULL;
-    
+
     probe_kernel_read(&ptr, unsafe_ptr, sizeof(ptr));
     dev = (struct net_device*) ptr;
-    
+
     if (dev != NULL && (memcmp(dev->name, dev_name, 2) == 0)){
         printk("name : %s\n", dev->name);
 	    trace_netif_receive_skb_filter(skb);
-    } else {
-        printk("No device found! \n");
-        return 0;
     }
     return 0;
 }
@@ -83,5 +80,5 @@ module_init(lttng_addons_netif_receive_skb_filter_init);
 module_exit(lttng_addons_netif_receive_skb_filter_exit);
 
 MODULE_LICENSE("GPL and additional rights");
-MODULE_AUTHOR("Suchakra Sharma <suchakrapani.sharma@polymtl.com>");
+MODULE_AUTHOR("Suchakra Sharma <suchakrapani.sharma@polymtl.ca>");
 MODULE_DESCRIPTION("LTTng filtered skb tracer");
