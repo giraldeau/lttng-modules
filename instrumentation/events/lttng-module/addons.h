@@ -9,6 +9,10 @@
 #include <net/sock.h>
 #include <linux/tcp.h>
 
+#include <linux/module.h>
+#include <linux/netdevice.h>
+#include <linux/skbuff.h>
+
 DECLARE_EVENT_CLASS(inet_sock_local_template,
 	TP_PROTO(struct sock *sk, struct tcphdr *tcph),
 	TP_ARGS(sk, tcph),
@@ -158,6 +162,35 @@ TRACE_EVENT(vmsync_hg_host,
 			tp_assign(vm_uid, vm_uid)
 			),
 		TP_printk("%u %lu", __entry->cnt, __entry->vm_uid)
+)
+
+DECLARE_EVENT_CLASS(net_dev_filter_template,
+
+	TP_PROTO(struct sk_buff *skb),
+
+	TP_ARGS(skb),
+
+	TP_STRUCT__entry(
+		__field(	void *,		skbaddr		)
+		__field(	unsigned int,	len		)
+		__string(	name,		skb->dev->name	)
+	),
+
+	TP_fast_assign(
+		tp_assign(skbaddr, skb)
+		tp_assign(len, skb->len)
+		tp_strcpy(name, skb->dev->name)
+	),
+
+	TP_printk("dev=%s skbaddr=%p len=%u",
+		__get_str(name), __entry->skbaddr, __entry->len)
+)
+
+DEFINE_EVENT(net_dev_filter_template, netif_receive_skb_filter,
+
+	TP_PROTO(struct sk_buff *skb),
+
+	TP_ARGS(skb)
 )
 
 #endif /* LTTNG_NET_H_ */

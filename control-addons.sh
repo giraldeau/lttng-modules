@@ -10,18 +10,14 @@ load_modules() {
 	echo "loading lttng-addons"
 	sudo modprobe lttng-probe-addons
 	sudo modprobe lttng-packet
-	sudo modprobe lttng-syscall-entry
-	#sudo modprobe lttng-mmap
-	sudo modprobe lttng-ttwu
+    sudo modprobe lttng-skb-recv
 }
 
 unload_modules() {
 	echo "unloading lttng-addons"
 	sudo rmmod lttng-probe-addons
-	sudo rmmod lttng-ttwu
 	sudo rmmod lttng-packet
-	sudo rmmod lttng-syscall-entry
-	#sudo rmmod lttng-mmap
+    sudo rmmod lttng-skb-recv
 }
 
 reload_modules() {
