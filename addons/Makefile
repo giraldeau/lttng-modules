@@ -8,6 +8,7 @@ ifneq ($(CONFIG_TRACEPOINTS),)
 ccflags-y += -I$(PWD)/addons
 
 obj-m += lttng-probe-addons.o
+obj-m += lttng-packet.o
 
 endif
 
