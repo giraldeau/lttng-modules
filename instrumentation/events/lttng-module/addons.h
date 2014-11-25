@@ -39,6 +39,17 @@ LTTNG_TRACEPOINT_EVENT_INSTANCE(inet_sock_local_template, inet_sock_local_out,
 	TP_PROTO(struct sock *sk, struct tcphdr *tcph),
 	TP_ARGS(sk, tcph))
 
+LTTNG_TRACEPOINT_EVENT(sched_ttwu,
+	TP_PROTO(int tid),
+	TP_ARGS(tid),
+	TP_STRUCT__entry(
+		__field(int, tid)
+	),
+	TP_fast_assign(
+		tp_assign(tid, tid)
+	),
+	TP_printk("%d", __entry->tid)
+)
 
 #endif /* LTTNG_ADDONS_H_ */
 
