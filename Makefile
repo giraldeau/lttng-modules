@@ -93,6 +93,7 @@ ifneq ($(KERNELRELEASE),)
   obj-$(CONFIG_LTTNG) += probes/
   obj-$(CONFIG_LTTNG) += lib/
   obj-$(CONFIG_LTTNG) += tests/
+  obj-$(CONFIG_LTTNG) += addons/
 
 else # KERNELRELEASE
 
