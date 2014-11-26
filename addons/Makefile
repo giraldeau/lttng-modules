@@ -10,6 +10,8 @@ ccflags-y += -I$(PWD)/addons
 obj-m += lttng-probe-addons.o
 obj-m += lttng-packet.o
 obj-m += lttng-ttwu.o
+obj-m += lttng-vmsync-guest.o
+obj-m += lttng-vmsync-host.o
 
 endif
 
