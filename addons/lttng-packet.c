@@ -68,6 +68,8 @@ unsigned int nf_hookfn_inet_local_in(const struct nf_hook_ops *ops,
 		tcph = (struct tcphdr *)(skb->data + (iph->ihl << 2 ));
 		sk = __inet_lookup_skb(&tcp_hashinfo, skb, tcph->source, tcph->dest);
 		trace_inet_sock_local_in(sk, tcph);
+		if (sk)
+		    sock_put(sk);
 	}
 	return NF_ACCEPT;
 }
