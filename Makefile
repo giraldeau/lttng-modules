@@ -46,6 +46,7 @@ lttng-tracer-objs += $(shell \
 obj-m += probes/
 obj-m += lib/
 obj-m += addons/
+obj-m += filter-examples/
 
 endif # CONFIG_TRACEPOINTS
 

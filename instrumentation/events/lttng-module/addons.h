@@ -13,6 +13,13 @@
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 
+#include <linux/sched.h>
+#include <linux/binfmts.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,9,0))
+#include <linux/sched/rt.h>
+#endif
+
 DECLARE_EVENT_CLASS(inet_sock_local_template,
 	TP_PROTO(struct sock *sk, struct tcphdr *tcph),
 	TP_ARGS(sk, tcph),
@@ -191,6 +198,149 @@ DEFINE_EVENT(net_dev_filter_template, netif_receive_skb_filter,
 	TP_PROTO(struct sk_buff *skb),
 
 	TP_ARGS(skb)
+)
+/*
+TRACE_EVENT(netif_receive_skb_more,
+
+	TP_PROTO(struct sk_buff *skb),
+
+	TP_ARGS(skb),
+
+	TP_STRUCT__entry(
+		__field(	void *,		skbaddr		)
+		__field(	unsigned int,	len		)
+		__string(	name,		skb->dev->name	)
+		__field(	unsigned int,	protocol	)
+	),
+
+	TP_fast_assign(
+		tp_assign(skbaddr, skb)
+		tp_assign(len, skb->len)
+		tp_strcpy(name, skb->dev->name)
+		tp_assign(protocol, skb->protocol)
+	),
+
+	TP_printk("dev=%s skbaddr=%p len=%u prot=%u",
+		__get_str(name), __entry->skbaddr, __entry->len)
+)
+*/
+
+#ifndef _TRACE_SCHED_DEF_
+#define _TRACE_SCHED_DEF_
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,13,0))
+
+static inline long __trace_sched_switch_state(struct task_struct *p)
+{
+        long state = p->state;
+
+#ifdef CONFIG_PREEMPT
+        /*
+ *          * For all intents and purposes a preempted task is a running task.
+ *                   */
+        if (task_preempt_count(p) & PREEMPT_ACTIVE)
+                state = TASK_RUNNING | TASK_STATE_MAX;
+#endif
+
+        return state;
+}
+
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+
+static inline long __trace_sched_switch_state(struct task_struct *p)
+{
+        long state = p->state;
+
+#ifdef CONFIG_PREEMPT
+        /*
+ *          * For all intents and purposes a preempted task is a running task.
+ *                   */
+        if (task_thread_info(p)->preempt_count & PREEMPT_ACTIVE)
+                state = TASK_RUNNING | TASK_STATE_MAX;
+#endif
+
+        return state;
+}
+
+#elif (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+
+static inline long __trace_sched_switch_state(struct task_struct *p)
+{
+        long state = p->state;
+
+#ifdef CONFIG_PREEMPT
+        /*
+ *          * For all intents and purposes a preempted task is a running task.
+ *                   */
+        if (task_thread_info(p)->preempt_count & PREEMPT_ACTIVE)
+                state = TASK_RUNNING;
+#endif
+
+        return state;
+}
+
+#endif
+
+#endif /* _TRACE_SCHED_DEF_ */
+
+TRACE_EVENT(sched_switch_filter,
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+        TP_PROTO(struct task_struct *prev,
+                 struct task_struct *next),
+
+        TP_ARGS(prev, next),
+#else /* #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)) */
+        TP_PROTO(struct rq *rq, struct task_struct *prev,
+                 struct task_struct *next),
+
+        TP_ARGS(rq, prev, next),
+#endif /* #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35)) */
+
+        TP_STRUCT__entry(
+                __array_text(   char,   prev_comm,      TASK_COMM_LEN   )
+                __field(        pid_t,  prev_tid                        )
+                __field(        int,    prev_prio                       )
+                __field(        long,   prev_state                      )
+                __array_text(   char,   next_comm,      TASK_COMM_LEN   )
+                __field(        pid_t,  next_tid                        )
+                __field(        int,    next_prio                       )
+        ),
+
+        TP_fast_assign(
+                tp_memcpy(next_comm, next->comm, TASK_COMM_LEN)
+                tp_assign(prev_tid, prev->pid)
+                tp_assign(prev_prio, prev->prio - MAX_RT_PRIO)
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,35))
+                tp_assign(prev_state, __trace_sched_switch_state(prev))
+#else
+                tp_assign(prev_state, prev->state)
+#endif
+                tp_memcpy(prev_comm, prev->comm, TASK_COMM_LEN)
+                tp_assign(next_tid, next->pid)
+                tp_assign(next_prio, next->prio - MAX_RT_PRIO)
+        ),
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(3,2,0))
+        TP_printk("prev_comm=%s prev_tid=%d prev_prio=%d prev_state=%s%s ==> next_comm=%s next_tid=%d next_prio=%d",
+                __entry->prev_comm, __entry->prev_tid, __entry->prev_prio,
+                __entry->prev_state & (TASK_STATE_MAX-1) ?
+                  __print_flags(__entry->prev_state & (TASK_STATE_MAX-1), "|",
+                                { 1, "S"} , { 2, "D" }, { 4, "T" }, { 8, "t" },
+                                { 16, "Z" }, { 32, "X" }, { 64, "x" },
+                                { 128, "W" }) : "R",
+                __entry->prev_state & TASK_STATE_MAX ? "+" : "",
+                __entry->next_comm, __entry->next_tid, __entry->next_prio)
+#else
+        TP_printk("prev_comm=%s prev_tid=%d prev_prio=%d prev_state=%s ==> next_comm=%s next_tid=%d next_prio=%d",
+                __entry->prev_comm, __entry->prev_tid, __entry->prev_prio,
+                __entry->prev_state ?
+                  __print_flags(__entry->prev_state, "|",
+                                { 1, "S"} , { 2, "D" }, { 4, "T" }, { 8, "t" },
+                                { 16, "Z" }, { 32, "X" }, { 64, "x" },
+                                { 128, "W" }) : "R",
+                __entry->next_comm, __entry->next_tid, __entry->next_prio)
+#endif
 )
 
 #endif /* LTTNG_NET_H_ */
