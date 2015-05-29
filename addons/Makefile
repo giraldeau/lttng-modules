@@ -36,6 +36,6 @@ clean:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD) clean
 
 %.i: %.c
-        $(MAKE) -C $(KERNELDIR) M=$(PWD) $@
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) $@
 
 endif

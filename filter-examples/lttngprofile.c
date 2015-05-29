@@ -28,6 +28,15 @@
 #include <linux/hashtable.h>
 #include <linux/jhash.h>
 #include <linux/types.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/debugfs.h>
+
+#ifndef VM_RESERVED
+# define  VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
+#endif
 
 #include "../wrapper/tracepoint.h"
 #include "../wrapper/trace-clock.h"
@@ -41,6 +50,101 @@
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/latency_tracker.h>
+
+
+/*
+ * Shared memory for KeBPF and UeBPF
+ * 
+ */
+
+struct dentry  *file;
+
+struct procdat
+{
+    int thresh;
+    int miss;
+};
+
+struct mmap_info
+{
+    struct procdat *data;
+    int reference;      
+};
+ 
+void mmap_open(struct vm_area_struct *vma)
+{
+    struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
+    info->reference++;
+}
+ 
+void mmap_close(struct vm_area_struct *vma)
+{
+    struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
+    info->reference--;
+}
+ 
+static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+{
+    struct page *page;
+    struct mmap_info *info;    
+     
+    info = (struct mmap_info *)vma->vm_private_data;
+    
+    page = virt_to_page(info->data);    
+     
+    get_page(page);
+    vmf->page = page;            
+     
+    return 0;
+}
+ 
+struct vm_operations_struct mmap_vm_ops =
+{
+    .open =     mmap_open,
+    .close =    mmap_close,
+    .fault =    mmap_fault,    
+};
+ 
+int op_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+    vma->vm_ops = &mmap_vm_ops;
+    vma->vm_flags |= VM_RESERVED;    
+    vma->vm_private_data = filp->private_data;
+    mmap_open(vma);
+    return 0;
+}
+ 
+int mmapfop_close(struct inode *inode, struct file *filp)
+{
+    struct mmap_info *info = filp->private_data;
+     
+    free_page((unsigned long)info->data);
+    kfree(info);
+    filp->private_data = NULL;
+    return 0;
+}
+ 
+int mmapfop_open(struct inode *inode, struct file *filp)
+{
+    struct mmap_info *info = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);    
+    info->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
+    info->data->thresh = 42;
+    info->data->miss=43;
+    //unsigned int thresh = 42;   
+    //memcpy(info->&data, "REDDY", 6);
+    //memcpy(info->&data+32, &thresh, sizeof(unsigned int));
+    /* assign this info struct to the file */
+    filp->private_data = info;
+    return 0;
+}
+ 
+static const struct file_operations mmap_fops = {
+    .open = mmapfop_open,
+    .release = mmapfop_close,
+    .mmap = op_mmap,
+};
+
+/******************************/
 
 static struct proc_dir_entry *lttngprofile_proc_dentry;
 
@@ -314,8 +418,11 @@ static void syscall_exit_probe(
     unsigned int res = 0;
     res = run_bpf_filter(prog, &bctx);
     if (res == 1){
+    // printk("Low: %d\n", sys_id);
         return;
     }
+
+    // printk("High: %d\n", sys_id);
 
   // Send the signal.
   //send_sig_info(SIGPROF, SEND_SIG_NOINFO, task);
@@ -414,6 +521,9 @@ int __init lttngprofile_init(void)
     ret = init_ebpf_prog();
   (void) wrapper_lttng_fixup_sig(THIS_MODULE);
   wrapper_vmalloc_sync_all();
+  
+  /*create debugfs entry for ebpf memory sharing*/
+  file = debugfs_create_file("ebpflttng", 0644, NULL, NULL, &mmap_fops);
 
   lttngprofile_proc_dentry = proc_create_data(LTTNGPROFILE_PROC,
       S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH,
@@ -477,10 +587,12 @@ void __exit lttngprofile_exit(void)
     /*Free BPF stuff*/
     bpf_prog_free(prog);
     printk("Freed bpf prog\n");
+  
+  /* Remove debugfs file */
+  debugfs_remove(file);
 }
 module_exit(lttngprofile_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Suchakra");
 MODULE_DESCRIPTION("LTTng-profile eBPF module.");
-MODULE_VERSION("0.0.1");
