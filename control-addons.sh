@@ -6,34 +6,39 @@ then
         exit
 fi
 
-load_modules() {
-	echo "loading lttng-addons"
-	sudo modprobe lttng-probe-addons
-	sudo modprobe lttng-packet
-	sudo modprobe lttng-ttwu
-}
+modules="lttng-probe-addons lttng-packet lttng-ttwu"
 
-unload_modules() {
-	echo "unloading lttng-addons"
-	sudo rmmod lttng-probe-addons
-	sudo rmmod lttng-ttwu
-	sudo rmmod lttng-packet
-}
+virt_what=$(which virt-what)
 
-reload_modules() {
-	unload_modules
-	load_modules
+if [ -z "$virt_what" ]; then
+	echo "Warning: virt-what not found, required to load the right vmsync module"
+	echo "sudo apt-get install virt-what"
+else
+	if [ "$(sudo virt-what)" = "kvm" ]; then
+		vmsync="lttng-vmsync-guest"
+	else
+		vmsync="lttng-vmsync-host"
+	fi
+	modules="$modules $vmsync"
+fi
+
+manage_modules() {
+	op=$1
+	for mod in $modules; do
+		sudo $op $mod
+	done
 }
 
 case "$1" in
 load)
-	load_modules
+	manage_modules modprobe
     ;;
 unload)
-	unload_modules
+	manage_modules rmmod
     ;;
 reload)
-	reload_modules
+	manage_modules rmmod
+	manage_modules modprobe
     ;;
 *) echo "unkown command $1"
    ;;
