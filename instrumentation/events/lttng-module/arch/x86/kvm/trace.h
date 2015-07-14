@@ -12,7 +12,7 @@
 #include <../arch/x86/kvm/kvm_cache_regs.h>
 
 #undef TRACE_SYSTEM
-#define TRACE_SYSTEM kvm
+#define TRACE_SYSTEM kvm_x86
 
 /*
  * Tracepoint for guest mode entry.
