@@ -9,18 +9,18 @@ fi
 load_modules() {
 	echo "loading lttng-addons"
 	sudo modprobe lttng-probe-addons
-	sudo modprobe lttng-packet
-    	sudo modprobe lttng-netif-filter
-    	sudo modprobe lttng-sched-filter
+    #sudo modprobe lttng-packet
+    #sudo modprobe lttng-netif-filter
+    #sudo modprobe lttng-sched-filter
 	sudo modprobe lttngprofile
 }
 
 unload_modules() {
 	echo "unloading lttng-addons"
 	sudo rmmod lttng-probe-addons
-	sudo rmmod lttng-packet
-    	sudo rmmod lttng-netif-filter
-    	sudo rmmod lttng-sched-filter
+	#sudo rmmod lttng-packet
+    #sudo rmmod lttng-netif-filter
+    #sudo rmmod lttng-sched-filter
 	sudo rmmod lttngprofile
 }
 

@@ -46,11 +46,11 @@
 #include <linux/bpf.h>
 #include <linux/filter.h>
 #include <trace/bpf_trace.h>
+#include <trace/bpf_exports.h>
 #include <asm/syscall.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/latency_tracker.h>
-
 
 /*
  * Shared memory for KeBPF and UeBPF
@@ -58,7 +58,9 @@
  */
 
 struct dentry  *file;
+extern unsigned int thresh;
 
+#if 1
 struct procdat
 {
     int thresh;
@@ -70,6 +72,8 @@ struct mmap_info
     struct procdat *data;
     int reference;      
 };
+
+struct mmap_info *inf = NULL;
  
 void mmap_open(struct vm_area_struct *vma)
 {
@@ -126,15 +130,12 @@ int mmapfop_close(struct inode *inode, struct file *filp)
  
 int mmapfop_open(struct inode *inode, struct file *filp)
 {
-    struct mmap_info *info = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);    
-    info->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
-    info->data->thresh = 42;
-    info->data->miss=43;
-    //unsigned int thresh = 42;   
-    //memcpy(info->&data, "REDDY", 6);
-    //memcpy(info->&data+32, &thresh, sizeof(unsigned int));
-    /* assign this info struct to the file */
-    filp->private_data = info;
+    inf = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);    
+    inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
+    inf->data->thresh = 10;
+    inf->data->miss=43;
+    filp->private_data = inf;
+    //thresh = info->data->thresh;
     return 0;
 }
  
@@ -145,6 +146,64 @@ static const struct file_operations mmap_fops = {
 };
 
 /******************************/
+
+static u64 bpf_get_threshold(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
+{
+	if (inf == NULL){
+		printk("NO THRESH YET!\n");
+		return NULL;
+	}
+	return (u64) (long) inf->data->thresh;
+}
+
+static struct bpf_func_proto filter_funcs[] = {
+	[BPF_FUNC_get_threshold] = {
+		.func = bpf_get_threshold,
+		.gpl_only = false,
+		.ret_type = RET_INTEGER,
+	},
+};
+
+/* __bpf_call_base is exported from bpf/core.c for actual offset*/
+
+/*noinline u64 __bpf_call_base(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)                                                                              
+{
+    return 0;
+}
+*/
+static const struct bpf_func_proto *func_proto(enum bpf_func_id func_id)
+{
+    if (func_id < 0 || func_id >= ARRAY_SIZE(filter_funcs))
+        return NULL;
+    return &filter_funcs[func_id];
+}
+
+
+void fixup_bpf_calls(struct bpf_prog *prog)
+{
+    const struct bpf_func_proto *fn;
+    int i;
+
+    //prog->aux->ops->get_func_proto = func_proto;
+
+    for (i = 0; i < prog->len; i++){
+        struct bpf_insn *insn = &prog->insnsi[i];
+        if (insn->code == (BPF_JMP | BPF_CALL)){
+//           if (!prog->aux->ops->get_func_proto)
+//               printk("No get_func_proto!\n");
+//            fn = prog->aux->ops->get_func_proto(insn->imm);
+            fn = func_proto(insn->imm);
+            if (!fn->func)
+                printk("No func!\n");
+            insn->imm = fn->func - __bpf_call_base;
+//            printk("CORE: insn->imm %d\n", insn->imm);
+        }   
+    }   
+}
+
+#endif
+
+/*************************/
 
 static struct proc_dir_entry *lttngprofile_proc_dentry;
 
@@ -178,8 +237,16 @@ struct bpf_prog *prog;
 /* The actual eBPF prog instructions */
 static struct bpf_insn insn_prog[] = { 
     BPF_LDX_MEM(BPF_DW, BPF_REG_2, BPF_REG_1, 0), /* r2 = bctx (which is therefore arg1, and thus, latency) */
-    BPF_LD_IMM64(BPF_REG_3, 10000), /* r3 = 100000 ns (Threshold) */
-    BPF_JMP_REG(BPF_JGT, BPF_REG_2, BPF_REG_3, 3),
+    BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_get_threshold),
+    //BPF_LD_IMM64(BPF_REG_0, 1000), /* FALSE */
+    BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),
+    
+//    BPF_LD_IMM64(BPF_REG_1, "%u"),
+//    BPF_LD_IMM64(BPF_REG_2, 8),
+//    BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_printk),
+
+//    BPF_LD_IMM64(BPF_REG_3, 10000), /* r3 = 100000 ns (Threshold) */
+    BPF_JMP_REG(BPF_JGT, BPF_REG_3, BPF_REG_2, 3),
     BPF_LD_IMM64(BPF_REG_0, 0), /* FALSE */
     BPF_EXIT_INSN(),
     BPF_LD_IMM64(BPF_REG_0, 1), /* TRUE */
@@ -200,7 +267,7 @@ unsigned int run_bpf_filter(struct bpf_prog *prog1, struct bpf_context *ctx){
     rcu_read_unlock();
     return ret;
 }
- 
+
 /* Inititlize and prepare the eBPF prog */
 unsigned int init_ebpf_prog(void)
 {
@@ -209,7 +276,7 @@ unsigned int init_ebpf_prog(void)
     unsigned int insn_count = sizeof(insn_prog) / sizeof(struct bpf_insn);
 
     union bpf_attr attr = {
-        .prog_type = BPF_PROG_TYPE_UNSPEC,
+        .prog_type = BPF_PROG_TYPE_TRACING_FILTER,
         .insns = ptr_to_u64((void*) insn_prog),
         .insn_cnt = insn_count,
         .license = ptr_to_u64((void *) "GPL"),
@@ -217,6 +284,8 @@ unsigned int init_ebpf_prog(void)
         .log_size = 1024,
         .log_level = 1,
     };
+
+    enum bpf_prog_type type = attr.prog_type;
 
     prog = bpf_prog_alloc(bpf_prog_size(attr.insn_cnt), GFP_USER);
     if (!prog)
@@ -229,7 +298,7 @@ unsigned int init_ebpf_prog(void)
         atomic_set(&prog->aux->refcnt, 1);
     prog->aux->is_gpl_compatible = true;
 
-    /* We skip verification for now */
+    fixup_bpf_calls(prog);
 
     /* ready for JIT */
     bpf_prog_select_runtime(prog);
@@ -408,6 +477,12 @@ static void syscall_exit_probe(
   }
 */
 
+	//printk("MODULE: Thresh: %u\n", thresh);
+#if 0
+	struct mmap_info *inf = fp_lttngebpf->private_data;
+	struct procdat *pd = inf->data;
+	printk("MODULE: Thresh: %u\n", pd->thresh);
+#endif
     latency = sys_exit_ts - sys_entry_ts;
 
     /* Prepare BPF context*/
@@ -418,11 +493,11 @@ static void syscall_exit_probe(
     unsigned int res = 0;
     res = run_bpf_filter(prog, &bctx);
     if (res == 1){
-    // printk("Low: %d\n", sys_id);
+       printk("Low: %d, %d\n", sys_id, latency);
         return;
     }
 
-    // printk("High: %d\n", sys_id);
+     printk("High: %d, %d\n", sys_id, latency);
 
   // Send the signal.
   //send_sig_info(SIGPROF, SEND_SIG_NOINFO, task);
