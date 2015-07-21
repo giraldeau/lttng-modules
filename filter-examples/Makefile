@@ -3,10 +3,7 @@ ifneq ($(CONFIG_TRACEPOINTS),)
 
 ccflags-y += -I$(PWD)/filter-examples/include
 
-obj-m += lttngprofile.o 
-obj-m += net_filt_tp.o
-#net_filt_tp-objs += ../lttng-tracepoint.o
-#net_filt_tp-objs += ../lttng-tracer.o
+obj-m += lttngprofile.o
 
 endif
 

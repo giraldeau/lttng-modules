@@ -1,5 +1,7 @@
 /*
- * Copyright (C) 2015 Francois Doray <francois.doray@gmail.com>
+ * lttng-profile-ebpf
+ *
+ * Copyright (C) 2015 Suchakra Sharma <suchakrapani.sharma@polymtl.ca>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -15,8 +17,15 @@
  * License along with this library; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  *
- * Inspired from https://github.com/giraldeau/perfuser-modules,
- * by Francis Giraldeau.
+ * Inspired from perfuser-modules by Francis Giraldeau and
+ * lttng-profile by Francois Doray
+ *
+ * lttng-profile Copyright (C) 2015 Francois Doray <francois.doray@gmail.com>
+ *
+ * References:
+ *  - mmap example implementation by Ariane Keller at,
+ *    http://people.ee.ethz.ch/~arkeller/linux/
+ *  - eBPF syscall implementation in kernel
  */
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -60,7 +69,6 @@
 struct dentry  *file;
 extern unsigned int thresh;
 
-#if 1
 struct procdat
 {
     int thresh;
@@ -70,49 +78,49 @@ struct procdat
 struct mmap_info
 {
     struct procdat *data;
-    int reference;      
+    int reference;
 };
 
 struct mmap_info *inf = NULL;
- 
+
 void mmap_open(struct vm_area_struct *vma)
 {
     struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
     info->reference++;
 }
- 
+
 void mmap_close(struct vm_area_struct *vma)
 {
     struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
     info->reference--;
 }
- 
+
 static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
     struct page *page;
-    struct mmap_info *info;    
-     
+    struct mmap_info *info;
+
     info = (struct mmap_info *)vma->vm_private_data;
-    
-    page = virt_to_page(info->data);    
-     
+
+    page = virt_to_page(info->data);
+
     get_page(page);
-    vmf->page = page;            
-     
+    vmf->page = page;
+
     return 0;
 }
- 
+
 struct vm_operations_struct mmap_vm_ops =
 {
     .open =     mmap_open,
     .close =    mmap_close,
-    .fault =    mmap_fault,    
+    .fault =    mmap_fault,
 };
- 
+
 int op_mmap(struct file *filp, struct vm_area_struct *vma)
 {
     vma->vm_ops = &mmap_vm_ops;
-    vma->vm_flags |= VM_RESERVED;    
+    vma->vm_flags |= VM_RESERVED;
     vma->vm_private_data = filp->private_data;
     mmap_open(vma);
     return 0;
@@ -121,7 +129,7 @@ int op_mmap(struct file *filp, struct vm_area_struct *vma)
 int mmapfop_close(struct inode *inode, struct file *filp)
 {
     struct mmap_info *info = filp->private_data;
-     
+
     free_page((unsigned long)info->data);
     kfree(info);
     filp->private_data = NULL;
@@ -130,12 +138,11 @@ int mmapfop_close(struct inode *inode, struct file *filp)
  
 int mmapfop_open(struct inode *inode, struct file *filp)
 {
-    inf = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);    
+    inf = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);
     inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
     inf->data->thresh = 10;
     inf->data->miss=43;
     filp->private_data = inf;
-    //thresh = info->data->thresh;
     return 0;
 }
  
@@ -164,13 +171,6 @@ static struct bpf_func_proto filter_funcs[] = {
 	},
 };
 
-/* __bpf_call_base is exported from bpf/core.c for actual offset*/
-
-/*noinline u64 __bpf_call_base(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)                                                                              
-{
-    return 0;
-}
-*/
 static const struct bpf_func_proto *func_proto(enum bpf_func_id func_id)
 {
     if (func_id < 0 || func_id >= ARRAY_SIZE(filter_funcs))
@@ -184,24 +184,16 @@ void fixup_bpf_calls(struct bpf_prog *prog)
     const struct bpf_func_proto *fn;
     int i;
 
-    //prog->aux->ops->get_func_proto = func_proto;
-
     for (i = 0; i < prog->len; i++){
         struct bpf_insn *insn = &prog->insnsi[i];
         if (insn->code == (BPF_JMP | BPF_CALL)){
-//           if (!prog->aux->ops->get_func_proto)
-//               printk("No get_func_proto!\n");
-//            fn = prog->aux->ops->get_func_proto(insn->imm);
             fn = func_proto(insn->imm);
             if (!fn->func)
                 printk("No func!\n");
             insn->imm = fn->func - __bpf_call_base;
-//            printk("CORE: insn->imm %d\n", insn->imm);
-        }   
-    }   
+        }
+    }
 }
-
-#endif
 
 /*************************/
 
@@ -238,14 +230,7 @@ struct bpf_prog *prog;
 static struct bpf_insn insn_prog[] = { 
     BPF_LDX_MEM(BPF_DW, BPF_REG_2, BPF_REG_1, 0), /* r2 = bctx (which is therefore arg1, and thus, latency) */
     BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_get_threshold),
-    //BPF_LD_IMM64(BPF_REG_0, 1000), /* FALSE */
     BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),
-    
-//    BPF_LD_IMM64(BPF_REG_1, "%u"),
-//    BPF_LD_IMM64(BPF_REG_2, 8),
-//    BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_printk),
-
-//    BPF_LD_IMM64(BPF_REG_3, 10000), /* r3 = 100000 ns (Threshold) */
     BPF_JMP_REG(BPF_JGT, BPF_REG_3, BPF_REG_2, 3),
     BPF_LD_IMM64(BPF_REG_0, 0), /* FALSE */
     BPF_EXIT_INSN(),
