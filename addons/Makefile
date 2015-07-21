@@ -15,8 +15,6 @@ obj-m += lttng-vmsync-guest.o
 obj-m += lttng-vmsync-host.o
 obj-m += lttng-packet.o
 obj-m += lttng-stacktrace.o
-obj-m += lttng-netif-filter.o
-obj-m += lttng-sched-filter.o
 
 endif
 
