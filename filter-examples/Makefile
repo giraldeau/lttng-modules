@@ -3,7 +3,9 @@ ifneq ($(CONFIG_TRACEPOINTS),)
 
 ccflags-y += -I$(PWD)/filter-examples/include
 
-obj-m += lttngprofile.o
+lttngprofile-objs += profile.o rculfhash.o rculfhash-mm-chunk.o wfcqueue.o
+
+obj-m := lttngprofile.o
 
 endif
 
