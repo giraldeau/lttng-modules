@@ -61,95 +61,178 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/latency_tracker.h>
 
+#include "urcu/compiler.h"
+#include "rculfhash.h"
+
+
 /*
  * Shared memory for KeBPF and UeBPF
  * 
  */
 
 struct dentry  *file;
-extern unsigned int thresh;
+//extern unsigned int thresh;
+
+struct mynode
+{
+	int value;
+	int seqnum;
+	struct cds_lfht_node *node;
+	struct rcu_head rcu_head;
+};
 
 struct procdat
 {
-    int thresh;
-    int miss;
+	struct cds_lfht *ht;
+	struct mynode *node;
+	int thresh;
+	int miss;
 };
+
+/* Helpers for urcu */
+static int match(struct cds_lfht_node *ht_node, const void *_key)
+{
+	struct mynode *node =
+		caa_container_of(ht_node, struct mynode, node);
+	const unsigned int *key = _key;
+
+	return *key == node->value;
+}
+
+static void free_node(struct rcu_head *head)
+{
+	struct mynode *node = caa_container_of(head, struct mynode, rcu_head);
+
+	kfree(node);
+}
 
 struct mmap_info
 {
-    struct procdat *data;
-    int reference;
+	struct procdat *data;
+	int reference;
 };
 
 struct mmap_info *inf = NULL;
 
 void mmap_open(struct vm_area_struct *vma)
 {
-    struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
-    info->reference++;
+	struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
+	info->reference++;
 }
 
 void mmap_close(struct vm_area_struct *vma)
 {
-    struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
-    info->reference--;
+	struct mmap_info *info = (struct mmap_info *)vma->vm_private_data;
+	info->reference--;
 }
 
 static int mmap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
-    struct page *page;
-    struct mmap_info *info;
+	struct page *page;
+	struct mmap_info *info;
 
-    info = (struct mmap_info *)vma->vm_private_data;
+	info = (struct mmap_info *)vma->vm_private_data;
 
-    page = virt_to_page(info->data);
+	page = virt_to_page(info->data);
 
-    get_page(page);
-    vmf->page = page;
+	get_page(page);
+	vmf->page = page;
 
-    return 0;
+	return 0;
 }
 
 struct vm_operations_struct mmap_vm_ops =
 {
-    .open =     mmap_open,
-    .close =    mmap_close,
-    .fault =    mmap_fault,
+	.open =     mmap_open,
+	.close =    mmap_close,
+	.fault =    mmap_fault,
 };
 
 int op_mmap(struct file *filp, struct vm_area_struct *vma)
 {
-    vma->vm_ops = &mmap_vm_ops;
-    vma->vm_flags |= VM_RESERVED;
-    vma->vm_private_data = filp->private_data;
-    mmap_open(vma);
-    return 0;
+	vma->vm_ops = &mmap_vm_ops;
+	vma->vm_flags |= VM_RESERVED;
+	vma->vm_private_data = filp->private_data;
+	mmap_open(vma);
+	return 0;
 }
- 
+
 int mmapfop_close(struct inode *inode, struct file *filp)
 {
-    struct mmap_info *info = filp->private_data;
+	struct mmap_info *info = filp->private_data;
 
-    free_page((unsigned long)info->data);
-    kfree(info);
-    filp->private_data = NULL;
-    return 0;
+	free_page((unsigned long)info->data);
+	kfree(info);
+	filp->private_data = NULL;
+	return 0;
 }
- 
+
 int mmapfop_open(struct inode *inode, struct file *filp)
 {
-    inf = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);
-    inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
-    inf->data->thresh = 10;
-    inf->data->miss=43;
-    filp->private_data = inf;
-    return 0;
+	inf = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);
+	inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
+	inf->data->thresh = 10;
+	inf->data->miss=43;
+	/*rcu LFHT implementation*/
+
+	/*Allocate HT*/
+	inf->data->ht = cds_lfht_new(1024, 1024, 1024, 0, NULL);
+
+	/*Add nodes to HT*/
+	int values[] = { 42, 43, 44, 45, 46, 47, 48 };
+	int i; 
+	int seqnum = 0;
+	struct cds_lfht_node *ht_node;
+
+	for (i = 0; i < CAA_ARRAY_SIZE(values); i++) {
+		unsigned long hash;
+		int value;
+
+		inf->data->node = kmalloc(sizeof(struct mynode), GFP_KERNEL);
+		if (!(inf->data->node)) {
+			return -1;
+		}
+
+//		printk("Creating node: 0x%p \n", inf->data->node);
+
+		cds_lfht_node_init(&(inf->data->node)->node);
+//		printk("Init node: 0x%p \n", inf->data->node);
+		value = values[i];
+		inf->data->node->value = value;
+		inf->data->node->seqnum = seqnum++;
+		hash = jhash(&value, sizeof(value), 42);
+
+		/*
+		 * cds_lfht_add() needs to be called from RCU read-side
+		 * critical section.
+		 */
+		rcu_read_lock();
+//		printk("Taken read lock: 0x%p \n", inf->data->node);
+		ht_node = cds_lfht_add_replace(inf->data->ht, hash, match, &value,
+				&(inf->data->node)->node);
+//		printk("Done add/replace: 0x%p \n", inf->data->node);
+		if (ht_node) {
+			struct mynode *ret_node =
+				caa_container_of(ht_node, struct mynode, node);
+
+			printk("Replaced node (key: %d, seqnum: %d) by (key: %d, seqnum: %d)\n",
+					ret_node->value, ret_node->seqnum,
+					inf->data->node->value, inf->data->node->seqnum);
+			call_rcu(&ret_node->rcu_head, free_node);
+		} else {
+			printk("Add (key: %d, seqnum: %d)\n",
+					inf->data->node->value, inf->data->node->seqnum);
+		}
+		rcu_read_unlock();
+	}
+	filp->private_data = inf;
+	return 0;
 }
- 
+
 static const struct file_operations mmap_fops = {
-    .open = mmapfop_open,
-    .release = mmapfop_close,
-    .mmap = op_mmap,
+	.open = mmapfop_open,
+	.release = mmapfop_close,
+	.mmap = op_mmap,
 };
 
 /******************************/
@@ -173,26 +256,26 @@ static struct bpf_func_proto filter_funcs[] = {
 
 static const struct bpf_func_proto *func_proto(enum bpf_func_id func_id)
 {
-    if (func_id < 0 || func_id >= ARRAY_SIZE(filter_funcs))
-        return NULL;
-    return &filter_funcs[func_id];
+	if (func_id < 0 || func_id >= ARRAY_SIZE(filter_funcs))
+		return NULL;
+	return &filter_funcs[func_id];
 }
 
 
 void fixup_bpf_calls(struct bpf_prog *prog)
 {
-    const struct bpf_func_proto *fn;
-    int i;
+	const struct bpf_func_proto *fn;
+	int i;
 
-    for (i = 0; i < prog->len; i++){
-        struct bpf_insn *insn = &prog->insnsi[i];
-        if (insn->code == (BPF_JMP | BPF_CALL)){
-            fn = func_proto(insn->imm);
-            if (!fn->func)
-                printk("No func!\n");
-            insn->imm = fn->func - __bpf_call_base;
-        }
-    }
+	for (i = 0; i < prog->len; i++){
+		struct bpf_insn *insn = &prog->insnsi[i];
+		if (insn->code == (BPF_JMP | BPF_CALL)){
+			fn = func_proto(insn->imm);
+			if (!fn->func)
+				printk("No func!\n");
+			insn->imm = fn->func - __bpf_call_base;
+		}
+	}
 }
 
 /*************************/
@@ -200,96 +283,96 @@ void fixup_bpf_calls(struct bpf_prog *prog)
 static struct proc_dir_entry *lttngprofile_proc_dentry;
 
 struct process_key_t {
-  pid_t tgid;
+	pid_t tgid;
 } __attribute__((__packed__));
 
 struct process_val_t {
-  pid_t tgid;
-  uint64_t latency_threshold;
-  struct hlist_node hlist;
-  struct rcu_head rcu;
+	pid_t tgid;
+	uint64_t latency_threshold;
+	struct hlist_node hlist;
+	struct rcu_head rcu;
 };
 
 struct thread_key_t {
-  pid_t pid;
+	pid_t pid;
 } __attribute__((__packed__));
 
 
 struct thread_val_t {
-  pid_t pid;
-  uint64_t sys_entry_ts;
-  int sys_id;
-  struct hlist_node hlist;
-  struct rcu_head rcu;
+	pid_t pid;
+	uint64_t sys_entry_ts;
+	int sys_id;
+	struct hlist_node hlist;
+	struct rcu_head rcu;
 };
 
 /* Global definitions */
 struct bpf_prog *prog;
- 
+
 /* The actual eBPF prog instructions */
 static struct bpf_insn insn_prog[] = { 
-    BPF_LDX_MEM(BPF_DW, BPF_REG_2, BPF_REG_1, 0), /* r2 = bctx (which is therefore arg1, and thus, latency) */
-    BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_get_threshold),
-    BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),
-    BPF_JMP_REG(BPF_JGT, BPF_REG_3, BPF_REG_2, 3),
-    BPF_LD_IMM64(BPF_REG_0, 0), /* FALSE */
-    BPF_EXIT_INSN(),
-    BPF_LD_IMM64(BPF_REG_0, 1), /* TRUE */
-    BPF_EXIT_INSN(),
+	BPF_LDX_MEM(BPF_DW, BPF_REG_2, BPF_REG_1, 0), /* r2 = bctx (which is therefore arg1, and thus, latency) */
+	BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_get_threshold),
+	BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),
+	BPF_JMP_REG(BPF_JGT, BPF_REG_3, BPF_REG_2, 3),
+	BPF_LD_IMM64(BPF_REG_0, 0), /* FALSE */
+	BPF_EXIT_INSN(),
+	BPF_LD_IMM64(BPF_REG_0, 1), /* TRUE */
+	BPF_EXIT_INSN(),
 };
 
 static void  *u64_to_ptr(__u64 val){
-    return (void *) (unsigned long) val;
+	return (void *) (unsigned long) val;
 }
- 
+
 static __u64 ptr_to_u64(void *ptr){
-    return (__u64) (unsigned long) ptr;
+	return (__u64) (unsigned long) ptr;
 }
- 
+
 unsigned int run_bpf_filter(struct bpf_prog *prog1, struct bpf_context *ctx){
-    rcu_read_lock();
-    u64 ret = BPF_PROG_RUN(prog1, (void*) ctx);
-    rcu_read_unlock();
-    return ret;
+	rcu_read_lock();
+	u64 ret = BPF_PROG_RUN(prog1, (void*) ctx);
+	rcu_read_unlock();
+	return ret;
 }
 
 /* Inititlize and prepare the eBPF prog */
 unsigned int init_ebpf_prog(void)
 {
-    int ret = 0;
-    char bpf_log_buf[1024];
-    unsigned int insn_count = sizeof(insn_prog) / sizeof(struct bpf_insn);
+	int ret = 0;
+	char bpf_log_buf[1024];
+	unsigned int insn_count = sizeof(insn_prog) / sizeof(struct bpf_insn);
 
-    union bpf_attr attr = {
-        .prog_type = BPF_PROG_TYPE_TRACING_FILTER,
-        .insns = ptr_to_u64((void*) insn_prog),
-        .insn_cnt = insn_count,
-        .license = ptr_to_u64((void *) "GPL"),
-        .log_buf = ptr_to_u64(bpf_log_buf),
-        .log_size = 1024,
-        .log_level = 1,
-    };
+	union bpf_attr attr = {
+		.prog_type = BPF_PROG_TYPE_TRACING_FILTER,
+		.insns = ptr_to_u64((void*) insn_prog),
+		.insn_cnt = insn_count,
+		.license = ptr_to_u64((void *) "GPL"),
+		.log_buf = ptr_to_u64(bpf_log_buf),
+		.log_size = 1024,
+		.log_level = 1,
+	};
 
-    enum bpf_prog_type type = attr.prog_type;
+	enum bpf_prog_type type = attr.prog_type;
 
-    prog = bpf_prog_alloc(bpf_prog_size(attr.insn_cnt), GFP_USER);
-    if (!prog)
-        return -ENOMEM;
-    prog->jited = false;
-    prog->orig_prog = NULL;
-    prog->len = attr.insn_cnt;
+	prog = bpf_prog_alloc(bpf_prog_size(attr.insn_cnt), GFP_USER);
+	if (!prog)
+		return -ENOMEM;
+	prog->jited = false;
+	prog->orig_prog = NULL;
+	prog->len = attr.insn_cnt;
 
-    if (memcpy(prog->insnsi, u64_to_ptr(attr.insns), prog->len * sizeof(struct bpf_insn)) != 0)
-        atomic_set(&prog->aux->refcnt, 1);
-    prog->aux->is_gpl_compatible = true;
+	if (memcpy(prog->insnsi, u64_to_ptr(attr.insns), prog->len * sizeof(struct bpf_insn)) != 0)
+		atomic_set(&prog->aux->refcnt, 1);
+	prog->aux->is_gpl_compatible = true;
 
-    fixup_bpf_calls(prog);
+	fixup_bpf_calls(prog);
 
-    /* ready for JIT */
-    bpf_prog_select_runtime(prog);
-    printk("prog jited? : %d\n", prog->jited);
+	/* ready for JIT */
+	bpf_prog_select_runtime(prog);
+	printk("prog jited? : %d\n", prog->jited);
 
-    return 0;
+	return 0;
 }
 
 /* map<process_key_t, process_val_t> */
@@ -303,50 +386,50 @@ static DEFINE_HASHTABLE(thread_map, 3);
  */
 static void free_process_val_rcu(struct rcu_head *rcu)
 {
-  kfree(container_of(rcu, struct process_val_t, rcu));
+	kfree(container_of(rcu, struct process_val_t, rcu));
 }
 
 static void free_thread_val_rcu(struct rcu_head *rcu)
 {
-  kfree(container_of(rcu, struct thread_val_t, rcu));
+	kfree(container_of(rcu, struct thread_val_t, rcu));
 }
 
-static struct process_val_t*
+	static struct process_val_t*
 find_process(struct process_key_t *key, u32 hash)
 {
-  struct process_val_t *val;
+	struct process_val_t *val;
 
-  hash_for_each_possible_rcu(process_map, val, hlist, hash) {
-    if (key->tgid == val->tgid) {
-      return val;
-    }
-  }
-  return NULL;
+	hash_for_each_possible_rcu(process_map, val, hlist, hash) {
+		if (key->tgid == val->tgid) {
+			return val;
+		}
+	}
+	return NULL;
 }
 
-static struct process_val_t*
+	static struct process_val_t*
 find_current_process(void)
 {
-  u32 hash;
-  struct process_key_t process_key;
+	u32 hash;
+	struct process_key_t process_key;
 
-  process_key.tgid = get_current()->tgid;
-  hash = jhash(&process_key, sizeof(process_key), 0);
+	process_key.tgid = get_current()->tgid;
+	hash = jhash(&process_key, sizeof(process_key), 0);
 
-  return find_process(&process_key, hash);
+	return find_process(&process_key, hash);
 }
 
-static struct thread_val_t*
+	static struct thread_val_t*
 find_thread(struct thread_key_t *key, u32 hash)
 {
-  struct thread_val_t *val;
+	struct thread_val_t *val;
 
-  hash_for_each_possible_rcu(thread_map, val, hlist, hash) {
-    if (key->pid == val->pid) {
-      return val;
-    }
-  }
-  return NULL;
+	hash_for_each_possible_rcu(thread_map, val, hlist, hash) {
+		if (key->pid == val->pid) {
+			return val;
+		}
+	}
+	return NULL;
 }
 
 /*
@@ -354,113 +437,113 @@ find_thread(struct thread_key_t *key, u32 hash)
  */
 static void process_unregister(pid_t tgid)
 {
-  u32 hash;
-  struct process_key_t key;
-  struct process_val_t *val;
+	u32 hash;
+	struct process_key_t key;
+	struct process_val_t *val;
 
-  key.tgid = tgid;
-  hash = jhash(&key, sizeof(key), 0);
+	key.tgid = tgid;
+	hash = jhash(&key, sizeof(key), 0);
 
-  rcu_read_lock();
-  val = find_process(&key, hash);
-  if (val) {
-    hash_del_rcu(&val->hlist);
-    call_rcu(&val->rcu, free_process_val_rcu);
-    printk("lttngprofile unregister process %d\n", tgid);
-  }
-  rcu_read_unlock();
+	rcu_read_lock();
+	val = find_process(&key, hash);
+	if (val) {
+		hash_del_rcu(&val->hlist);
+		call_rcu(&val->rcu, free_process_val_rcu);
+		printk("lttngprofile unregister process %d\n", tgid);
+	}
+	rcu_read_unlock();
 }
 
 /*
  * Probes.
  */
 static void syscall_entry_probe(
-    void *__data, struct pt_regs *regs, long id)
+		void *__data, struct pt_regs *regs, long id)
 {
-  u32 hash;
-  struct process_val_t *process_val;
-  struct thread_key_t thread_key;
-  struct thread_val_t *thread_val;
-  struct task_struct *task = get_current();
-  uint64_t sys_entry_ts = trace_clock_read64();
+	u32 hash;
+	struct process_val_t *process_val;
+	struct thread_key_t thread_key;
+	struct thread_val_t *thread_val;
+	struct task_struct *task = get_current();
+	uint64_t sys_entry_ts = trace_clock_read64();
 
-  // Check whether the process is registered to receive signals.
-  rcu_read_lock();
-  process_val = find_current_process();
+	// Check whether the process is registered to receive signals.
+	rcu_read_lock();
+	process_val = find_current_process();
 
-  if (process_val == NULL) {
-    rcu_read_unlock();
-    return;
-  }
+	if (process_val == NULL) {
+		rcu_read_unlock();
+		return;
+	}
 
-  // Keep track of the timestamp of this syscall entry.
-  thread_key.pid = task->pid;
-  hash = jhash(&thread_key, sizeof(thread_key), 0);
-  thread_val = find_thread(&thread_key, hash);
+	// Keep track of the timestamp of this syscall entry.
+	thread_key.pid = task->pid;
+	hash = jhash(&thread_key, sizeof(thread_key), 0);
+	thread_val = find_thread(&thread_key, hash);
 
-  if (thread_val != NULL) {
-    thread_val->sys_entry_ts = sys_entry_ts;
-    thread_val->sys_id = id;
-    rcu_read_unlock();
-    return;
-  }
+	if (thread_val != NULL) {
+		thread_val->sys_entry_ts = sys_entry_ts;
+		thread_val->sys_id = id;
+		rcu_read_unlock();
+		return;
+	}
 
-  rcu_read_unlock();
+	rcu_read_unlock();
 
-  thread_val = kzalloc(sizeof(struct thread_val_t), GFP_KERNEL);
-  thread_val->pid = task->pid;
-  thread_val->sys_entry_ts = sys_entry_ts;
-  thread_val->sys_id = id;
-  hash_add_rcu(thread_map, &thread_val->hlist, hash);
+	thread_val = kzalloc(sizeof(struct thread_val_t), GFP_KERNEL);
+	thread_val->pid = task->pid;
+	thread_val->sys_entry_ts = sys_entry_ts;
+	thread_val->sys_id = id;
+	hash_add_rcu(thread_map, &thread_val->hlist, hash);
 }
 
 static void syscall_exit_probe(
-    void *__data, struct pt_regs *regs, long ret)
+		void *__data, struct pt_regs *regs, long ret)
 {
-  u32 hash;
-  struct process_val_t *process_val;
-  struct thread_key_t thread_key;
-  struct thread_val_t *thread_val;
-  struct task_struct *task = get_current();
-  uint64_t latency = 0;
-  uint64_t latency_threshold = 0;
-  uint64_t sys_entry_ts = 0;
-  uint64_t sys_exit_ts = trace_clock_read64();
-  int sys_id;
+	u32 hash;
+	struct process_val_t *process_val;
+	struct thread_key_t thread_key;
+	struct thread_val_t *thread_val;
+	struct task_struct *task = get_current();
+	uint64_t latency = 0;
+	uint64_t latency_threshold = 0;
+	uint64_t sys_entry_ts = 0;
+	uint64_t sys_exit_ts = trace_clock_read64();
+	int sys_id;
 
-  // Check whether the process is registered to receive signals.
-  rcu_read_lock();
-  process_val = find_current_process();
+	// Check whether the process is registered to receive signals.
+	rcu_read_lock();
+	process_val = find_current_process();
 
-  if (process_val == NULL) {
-    rcu_read_unlock();
-    return;
-  }
+	if (process_val == NULL) {
+		rcu_read_unlock();
+		return;
+	}
 
-  latency_threshold = process_val->latency_threshold;
+	latency_threshold = process_val->latency_threshold;
 
-  // Get the timestamp of the syscall entry.
-  thread_key.pid = task->pid;
-  hash = jhash(&thread_key, sizeof(thread_key), 0);
-  thread_val = find_thread(&thread_key, hash);
+	// Get the timestamp of the syscall entry.
+	thread_key.pid = task->pid;
+	hash = jhash(&thread_key, sizeof(thread_key), 0);
+	thread_val = find_thread(&thread_key, hash);
 
-  if (thread_val == NULL) {
-    rcu_read_unlock();
-    return;
-  }
+	if (thread_val == NULL) {
+		rcu_read_unlock();
+		return;
+	}
 
-  sys_entry_ts = thread_val->sys_entry_ts;
-  sys_id = thread_val->sys_id;
+	sys_entry_ts = thread_val->sys_entry_ts;
+	sys_id = thread_val->sys_id;
 
-  rcu_read_unlock();
+	rcu_read_unlock();
 
-  // Check whether the system call was longer than the threshold.
+	// Check whether the system call was longer than the threshold.
 
-/*
-  if (sys_exit_ts - sys_entry_ts < latency_threshold) {
-    return;
-  }
-*/
+	/*
+	   if (sys_exit_ts - sys_entry_ts < latency_threshold) {
+	   return;
+	   }
+	   */
 
 	//printk("MODULE: Thresh: %u\n", thresh);
 #if 0
@@ -468,95 +551,95 @@ static void syscall_exit_probe(
 	struct procdat *pd = inf->data;
 	printk("MODULE: Thresh: %u\n", pd->thresh);
 #endif
-    latency = sys_exit_ts - sys_entry_ts;
+	latency = sys_exit_ts - sys_entry_ts;
 
-    /* Prepare BPF context*/
-    struct bpf_context bctx = {};
-    bctx.arg1 = (u64) latency;
+	/* Prepare BPF context*/
+	struct bpf_context bctx = {};
+	bctx.arg1 = (u64) latency;
 
-    /* Run the filter to decide */
-    unsigned int res = 0;
-    res = run_bpf_filter(prog, &bctx);
-    if (res == 1){
-       printk("Low: %d, %d\n", sys_id, latency);
-        return;
-    }
+	/* Run the filter to decide */
+	unsigned int res = 0;
+	res = run_bpf_filter(prog, &bctx);
+	if (res == 1){
+		printk("Low: %d, %d\n", sys_id, latency);
+		return;
+	}
 
-     printk("High: %d, %d\n", sys_id, latency);
+	printk("High: %d, %d\n", sys_id, latency);
 
-  // Send the signal.
-  //send_sig_info(SIGPROF, SEND_SIG_NOINFO, task);
+	// Send the signal.
+	//send_sig_info(SIGPROF, SEND_SIG_NOINFO, task);
 
-  // Log event.
-  trace_syscall_latency(sys_entry_ts, sys_exit_ts - sys_entry_ts, sys_id);
+	// Log event.
+	trace_syscall_latency(sys_entry_ts, sys_exit_ts - sys_entry_ts, sys_id);
 }
 
 static void sched_process_exit_probe(
-    void *__data, struct task_struct *p)
+		void *__data, struct task_struct *p)
 {
-  // TODO: Cleanup threads...
+	// TODO: Cleanup threads...
 
-  // If this is the main thread of a process, unregister the process.
-  if (p->pid == p->tgid) {
-    process_unregister(p->tgid);
-  }
+	// If this is the main thread of a process, unregister the process.
+	if (p->pid == p->tgid) {
+		process_unregister(p->tgid);
+	}
 }
 /*
  * Module ioctl interface.
  */
 long lttngprofile_module_ioctl(
-    struct file *file, unsigned int cmd, unsigned long arg)
+		struct file *file, unsigned int cmd, unsigned long arg)
 {
-  u32 hash;
-  struct process_key_t key;
-  struct process_val_t *val;
-  struct lttngprofile_module_msg msg;
-  struct task_struct *task = get_current();
-  int ret = 0;
-  void __user *umsg = (void *) arg;
+	u32 hash;
+	struct process_key_t key;
+	struct process_val_t *val;
+	struct lttngprofile_module_msg msg;
+	struct task_struct *task = get_current();
+	int ret = 0;
+	void __user *umsg = (void *) arg;
 
-  if (cmd != LTTNGPROFILE_MODULE_IOCTL)
-    return -ENOIOCTLCMD;
+	if (cmd != LTTNGPROFILE_MODULE_IOCTL)
+		return -ENOIOCTLCMD;
 
-  if (copy_from_user(&msg, umsg, sizeof(struct lttngprofile_module_msg)))
-    return -EFAULT;
+	if (copy_from_user(&msg, umsg, sizeof(struct lttngprofile_module_msg)))
+		return -EFAULT;
 
-  key.tgid = task->tgid;
-  hash = jhash(&key, sizeof(key), 0);
+	key.tgid = task->tgid;
+	hash = jhash(&key, sizeof(key), 0);
 
-  switch(msg.cmd) {
-  case LTTNGPROFILE_MODULE_REGISTER:
-    /* check if already registered */
-    rcu_read_lock();
-    val = find_process(&key, hash);
-    if (val) {
-      rcu_read_unlock();
-      break;
-    }
-    rcu_read_unlock();
-    /* do registration */
-    val = kzalloc(sizeof(struct process_val_t), GFP_KERNEL);
-    val->tgid = key.tgid;
-    val->latency_threshold = msg.latency_threshold;
-    hash_add_rcu(process_map, &val->hlist, hash);
-    printk("lttngprofile_module_ioctl register %d\n", task->tgid);
-    break;
-  case LTTNGPROFILE_MODULE_UNREGISTER:
-    process_unregister(task->tgid);
-    break;
-  default:
-    ret = -ENOTSUPP;
-    break;
-  }
+	switch(msg.cmd) {
+		case LTTNGPROFILE_MODULE_REGISTER:
+			/* check if already registered */
+			rcu_read_lock();
+			val = find_process(&key, hash);
+			if (val) {
+				rcu_read_unlock();
+				break;
+			}
+			rcu_read_unlock();
+			/* do registration */
+			val = kzalloc(sizeof(struct process_val_t), GFP_KERNEL);
+			val->tgid = key.tgid;
+			val->latency_threshold = msg.latency_threshold;
+			hash_add_rcu(process_map, &val->hlist, hash);
+			printk("lttngprofile_module_ioctl register %d\n", task->tgid);
+			break;
+		case LTTNGPROFILE_MODULE_UNREGISTER:
+			process_unregister(task->tgid);
+			break;
+		default:
+			ret = -ENOTSUPP;
+			break;
+	}
 
-  return ret;
+	return ret;
 }
 
 static const struct file_operations lttngprofile_fops = {
-  .owner = THIS_MODULE,
-  .unlocked_ioctl = lttngprofile_module_ioctl,
+	.owner = THIS_MODULE,
+	.unlocked_ioctl = lttngprofile_module_ioctl,
 #ifdef CONFIG_COMPAT
-  .compat_ioctl = lttngprofile_module_ioctl,
+	.compat_ioctl = lttngprofile_module_ioctl,
 #endif
 };
 
@@ -565,91 +648,91 @@ static const struct file_operations lttngprofile_fops = {
  */
 static void probes_unregister(void)
 {
-  lttng_wrapper_tracepoint_probe_unregister(
-      "sys_enter", syscall_entry_probe, NULL);
-  lttng_wrapper_tracepoint_probe_unregister(
-      "sys_exit", syscall_exit_probe, NULL);
-  lttng_wrapper_tracepoint_probe_unregister(
-      "sched_process_exit", sched_process_exit_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(
+			"sys_enter", syscall_entry_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(
+			"sys_exit", syscall_exit_probe, NULL);
+	lttng_wrapper_tracepoint_probe_unregister(
+			"sched_process_exit", sched_process_exit_probe, NULL);
 }
 
 int __init lttngprofile_init(void)
 {
-  int ret = 0;
+	int ret = 0;
 
-    /* Prepare eBPF prog*/
-    ret = init_ebpf_prog();
-  (void) wrapper_lttng_fixup_sig(THIS_MODULE);
-  wrapper_vmalloc_sync_all();
-  
-  /*create debugfs entry for ebpf memory sharing*/
-  file = debugfs_create_file("ebpflttng", 0644, NULL, NULL, &mmap_fops);
+	/* Prepare eBPF prog*/
+	ret = init_ebpf_prog();
+	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
+	wrapper_vmalloc_sync_all();
 
-  lttngprofile_proc_dentry = proc_create_data(LTTNGPROFILE_PROC,
-      S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH,
-      NULL, &lttngprofile_fops, NULL);
+	/*create debugfs entry for ebpf memory sharing*/
+	file = debugfs_create_file("ebpflttng", 0644, NULL, NULL, &mmap_fops);
 
-  if (!lttngprofile_proc_dentry) {
-    printk(KERN_ERR "Error creating lttngprofile control file\n");
-    ret = -ENOMEM;
-    goto error;
-  }
+	lttngprofile_proc_dentry = proc_create_data(LTTNGPROFILE_PROC,
+			S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH,
+			NULL, &lttngprofile_fops, NULL);
 
-  // Register probes.
-  if (lttng_wrapper_tracepoint_probe_register(
-        "sys_enter", syscall_entry_probe, NULL) < 0 ||
-      lttng_wrapper_tracepoint_probe_register(
-        "sys_exit", syscall_exit_probe, NULL) < 0 ||
-      lttng_wrapper_tracepoint_probe_register(
-        "sched_process_exit", sched_process_exit_probe, NULL) < 0)
-  {
-    printk("tracepoint_probe_register failed, returned %d\n", ret);
-    goto error;
-  }
+	if (!lttngprofile_proc_dentry) {
+		printk(KERN_ERR "Error creating lttngprofile control file\n");
+		ret = -ENOMEM;
+		goto error;
+	}
 
-  printk("LTTng-profile module loaded successfully.\n");
+	// Register probes.
+	if (lttng_wrapper_tracepoint_probe_register(
+				"sys_enter", syscall_entry_probe, NULL) < 0 ||
+			lttng_wrapper_tracepoint_probe_register(
+				"sys_exit", syscall_exit_probe, NULL) < 0 ||
+			lttng_wrapper_tracepoint_probe_register(
+				"sched_process_exit", sched_process_exit_probe, NULL) < 0)
+	{
+		printk("tracepoint_probe_register failed, returned %d\n", ret);
+		goto error;
+	}
 
-  return ret;
+	printk("LTTng-profile module loaded successfully.\n");
+
+	return ret;
 
 error:
-  if (lttngprofile_proc_dentry)
-    remove_proc_entry(LTTNGPROFILE_PROC, NULL);
+	if (lttngprofile_proc_dentry)
+		remove_proc_entry(LTTNGPROFILE_PROC, NULL);
 
-  probes_unregister();
+	probes_unregister();
 
-  return ret;
+	return ret;
 }
 module_init(lttngprofile_init);
 
 void __exit lttngprofile_exit(void)
 {
-  struct process_val_t *process_val;
-  struct thread_val_t *thread_val;
-  int bkt;
+	struct process_val_t *process_val;
+	struct thread_val_t *thread_val;
+	int bkt;
 
-  if (lttngprofile_proc_dentry)
-    remove_proc_entry(LTTNGPROFILE_PROC, NULL);
+	if (lttngprofile_proc_dentry)
+		remove_proc_entry(LTTNGPROFILE_PROC, NULL);
 
-  probes_unregister();
+	probes_unregister();
 
-  rcu_read_lock();
-  hash_for_each_rcu(process_map, bkt, process_val, hlist) {
-    hash_del_rcu(&process_val->hlist);
-    call_rcu(&process_val->rcu, free_process_val_rcu);
-  }
-  hash_for_each_rcu(thread_map, bkt, thread_val, hlist) {
-    hash_del_rcu(&thread_val->hlist);
-    call_rcu(&thread_val->rcu, free_thread_val_rcu);
-  }
-  rcu_read_unlock();
-  synchronize_rcu();
+	rcu_read_lock();
+	hash_for_each_rcu(process_map, bkt, process_val, hlist) {
+		hash_del_rcu(&process_val->hlist);
+		call_rcu(&process_val->rcu, free_process_val_rcu);
+	}
+	hash_for_each_rcu(thread_map, bkt, thread_val, hlist) {
+		hash_del_rcu(&thread_val->hlist);
+		call_rcu(&thread_val->rcu, free_thread_val_rcu);
+	}
+	rcu_read_unlock();
+	synchronize_rcu();
 
-    /*Free BPF stuff*/
-    bpf_prog_free(prog);
-    printk("Freed bpf prog\n");
-  
-  /* Remove debugfs file */
-  debugfs_remove(file);
+	/*Free BPF stuff*/
+	bpf_prog_free(prog);
+	printk("Freed bpf prog\n");
+
+	/* Remove debugfs file */
+	debugfs_remove(file);
 }
 module_exit(lttngprofile_exit);
 

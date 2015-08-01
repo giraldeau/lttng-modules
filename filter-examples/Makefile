@@ -2,6 +2,7 @@ ifneq ($(KERNELRELEASE),)
 ifneq ($(CONFIG_TRACEPOINTS),)
 
 ccflags-y += -I$(PWD)/filter-examples/include
+#ccflags-y += -I./
 
 lttngprofile-objs += profile.o rculfhash.o rculfhash-mm-chunk.o wfcqueue.o
 
