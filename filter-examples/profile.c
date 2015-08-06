@@ -61,50 +61,23 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/latency_tracker.h>
 
-#include "urcu/compiler.h"
-#include "rculfhash.h"
-
-
 /*
  * Shared memory for KeBPF and UeBPF
  * 
  */
 
 struct dentry  *file;
-//extern unsigned int thresh;
 
-struct mynode
-{
-	int value;
-	int seqnum;
-	struct cds_lfht_node *node;
-	struct rcu_head rcu_head;
-};
+/* Index for the values array */
+unsigned int index = 0;
+#define MAX_ARRAY_ELEM 1000
 
 struct procdat
 {
-	struct cds_lfht *ht;
-	struct mynode *node;
+	unsigned int val[1000];
+	unsigned int index;
 	int thresh;
-	int miss;
 };
-
-/* Helpers for urcu */
-static int match(struct cds_lfht_node *ht_node, const void *_key)
-{
-	struct mynode *node =
-		caa_container_of(ht_node, struct mynode, node);
-	const unsigned int *key = _key;
-
-	return *key == node->value;
-}
-
-static void free_node(struct rcu_head *head)
-{
-	struct mynode *node = caa_container_of(head, struct mynode, rcu_head);
-
-	kfree(node);
-}
 
 struct mmap_info
 {
@@ -151,7 +124,7 @@ struct vm_operations_struct mmap_vm_ops =
 int op_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	vma->vm_ops = &mmap_vm_ops;
-	vma->vm_flags |= VM_RESERVED;
+	vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
 	vma->vm_private_data = filp->private_data;
 	mmap_open(vma);
 	return 0;
@@ -169,62 +142,14 @@ int mmapfop_close(struct inode *inode, struct file *filp)
 
 int mmapfop_open(struct inode *inode, struct file *filp)
 {
-	inf = kmalloc(sizeof(struct mmap_info), GFP_KERNEL);
+	inf = kmalloc(sizeof(struct mmap_info), GFP_USER);
 	inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
 	inf->data->thresh = 10;
-	inf->data->miss=43;
-	/*rcu LFHT implementation*/
-
-	/*Allocate HT*/
-	inf->data->ht = cds_lfht_new(1024, 1024, 1024, 0, NULL);
-
-	/*Add nodes to HT*/
-	int values[] = { 42, 43, 44, 45, 46, 47, 48 };
-	int i; 
-	int seqnum = 0;
-	struct cds_lfht_node *ht_node;
-
-	for (i = 0; i < CAA_ARRAY_SIZE(values); i++) {
-		unsigned long hash;
-		int value;
-
-		inf->data->node = kmalloc(sizeof(struct mynode), GFP_KERNEL);
-		if (!(inf->data->node)) {
-			return -1;
-		}
-
-//		printk("Creating node: 0x%p \n", inf->data->node);
-
-		cds_lfht_node_init(&(inf->data->node)->node);
-//		printk("Init node: 0x%p \n", inf->data->node);
-		value = values[i];
-		inf->data->node->value = value;
-		inf->data->node->seqnum = seqnum++;
-		hash = jhash(&value, sizeof(value), 42);
-
-		/*
-		 * cds_lfht_add() needs to be called from RCU read-side
-		 * critical section.
-		 */
-		rcu_read_lock();
-//		printk("Taken read lock: 0x%p \n", inf->data->node);
-		ht_node = cds_lfht_add_replace(inf->data->ht, hash, match, &value,
-				&(inf->data->node)->node);
-//		printk("Done add/replace: 0x%p \n", inf->data->node);
-		if (ht_node) {
-			struct mynode *ret_node =
-				caa_container_of(ht_node, struct mynode, node);
-
-			printk("Replaced node (key: %d, seqnum: %d) by (key: %d, seqnum: %d)\n",
-					ret_node->value, ret_node->seqnum,
-					inf->data->node->value, inf->data->node->seqnum);
-			call_rcu(&ret_node->rcu_head, free_node);
-		} else {
-			printk("Add (key: %d, seqnum: %d)\n",
-					inf->data->node->value, inf->data->node->seqnum);
-		}
-		rcu_read_unlock();
-	}
+	inf->data->index = 0;
+int i;
+for (i=0;i<1000;i++){
+	inf->data->val[i] = 4242;
+}
 	filp->private_data = inf;
 	return 0;
 }
@@ -240,10 +165,27 @@ static const struct file_operations mmap_fops = {
 static u64 bpf_get_threshold(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
 {
 	if (inf == NULL){
-		printk("NO THRESH YET!\n");
+		printk("[KeBPF] NO THRESH YET!\n");
 		return NULL;
 	}
 	return (u64) (long) inf->data->thresh;
+}
+
+static void bpf_add_to_array(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
+{
+	if (inf == NULL){
+		printk("[KeBPF] NO ARRAY YET\n");
+		return NULL;
+	}
+	if (inf->data->index < MAX_ARRAY_ELEM){
+		//printk("[KeBPF] PREVIOUS %u %u\n", inf->data->val[inf->data->index], inf->data->index);
+		printk("[KeBPF] Adding %u to index %u\n", (unsigned long) r1, inf->data->index);
+		//inf->data->val[inf->data->index] = (u64) (long) r1;
+		inf->data->val[inf->data->index] = (u64) (long) r1;
+		//printk("[KeBPF] NEW %u %u\n", inf->data->val[inf->data->index], inf->data->index);
+		(inf->data->index)++;
+	}
+	else printk("[KeBPF] Max array length reached\n");
 }
 
 static struct bpf_func_proto filter_funcs[] = {
@@ -251,6 +193,13 @@ static struct bpf_func_proto filter_funcs[] = {
 		.func = bpf_get_threshold,
 		.gpl_only = false,
 		.ret_type = RET_INTEGER,
+	},
+
+	[BPF_FUNC_add_to_array] = {
+		.func = bpf_add_to_array,
+		.gpl_only = false,
+		.ret_type = RET_VOID,
+		.arg1_type = ARG_ANYTHING,
 	},
 };
 
@@ -312,6 +261,9 @@ struct bpf_prog *prog;
 /* The actual eBPF prog instructions */
 static struct bpf_insn insn_prog[] = { 
 	BPF_LDX_MEM(BPF_DW, BPF_REG_2, BPF_REG_1, 0), /* r2 = bctx (which is therefore arg1, and thus, latency) */
+	BPF_MOV64_REG(BPF_REG_1, BPF_REG_2), /*move the latency to r1*/
+	BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_add_to_array),
+
 	BPF_RAW_INSN(BPF_JMP | BPF_CALL, 0, 0, 0, BPF_FUNC_get_threshold),
 	BPF_MOV64_REG(BPF_REG_3, BPF_REG_0),
 	BPF_JMP_REG(BPF_JGT, BPF_REG_3, BPF_REG_2, 3),
