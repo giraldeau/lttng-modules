@@ -27,21 +27,45 @@
  *    http://people.ee.ethz.ch/~arkeller/linux/
  *  - eBPF syscall implementation in kernel
  */
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <linux/errno.h>
-#include <linux/proc_fs.h>
-#include <linux/kprobes.h>
-#include <linux/signal.h>
-#include <linux/sched.h>
-#include <linux/hashtable.h>
-#include <linux/jhash.h>
-#include <linux/types.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/init.h>
-#include <linux/fs.h>
+
+#include <asm/atomic.h>
+#include <asm/current.h>
+#include <asm/page.h>
+#include <asm/string_64.h>
+#include <asm/uaccess.h>
+#include <asm-generic/int-ll64.h>
+#include <linux/compiler.h>
+#include <linux/dcache.h>
 #include <linux/debugfs.h>
+#include <linux/errno.h>
+#include <linux/export.h>
+#include <linux/fs.h>
+#include <linux/gfp.h>
+#include <linux/hash.h>
+#include <linux/hashtable.h>
+#include <linux/init.h>
+#include <linux/jhash.h>
+#include <linux/kern_levels.h>
+#include <linux/kernel.h>
+#include <linux/log2.h>
+#include <linux/mm.h>
+#include <linux/mm_types.h>
+#include <linux/module.h>
+#include <linux/printk.h>
+#include <linux/proc_fs.h>
+#include <linux/rculist.h>
+#include <linux/rcupdate.h>
+#include <linux/sched.h>
+#include <linux/slab.h>
+#include <linux/stddef.h>
+#include <linux/types.h>
+#include <uapi/asm-generic/errno-base.h>
+#include <uapi/asm-generic/int-ll64.h>
+#include <uapi/linux/bpf.h>
+#include <uapi/linux/bpf_common.h>
+
+#include "../../linux/fs/proc/internal.h"
+#include "../lttng-tracepoint.h"
 
 #ifndef VM_RESERVED
 # define  VM_RESERVED   (VM_DONTEXPAND | VM_DONTDUMP)
@@ -74,7 +98,7 @@ unsigned int index = 0;
 
 struct procdat
 {
-	unsigned int val[1000];
+	unsigned int val[MAX_ARRAY_ELEM];
 	unsigned int index;
 	int thresh;
 };
@@ -142,16 +166,17 @@ int mmapfop_close(struct inode *inode, struct file *filp)
 
 int mmapfop_open(struct inode *inode, struct file *filp)
 {
-	inf = kmalloc(sizeof(struct mmap_info), GFP_USER);
-	inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
-	inf->data->thresh = 10;
-	inf->data->index = 0;
-int i;
-for (i=0;i<1000;i++){
-	inf->data->val[i] = 4242;
-}
-	filp->private_data = inf;
-	return 0;
+    int i;
+
+    inf = kmalloc(sizeof(struct mmap_info), GFP_USER);
+    inf->data = (struct procdat*) get_zeroed_page(GFP_KERNEL);
+    inf->data->thresh = 10;
+    inf->data->index = 0;
+    for (i = 0; i < MAX_ARRAY_ELEM; i++) {
+        inf->data->val[i] = 0xCAFEBABE;
+    }
+    filp->private_data = inf;
+    return 0;
 }
 
 static const struct file_operations mmap_fops = {
@@ -173,19 +198,20 @@ static u64 bpf_get_threshold(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
 
 static void bpf_add_to_array(u64 r1, u64 r2, u64 r3, u64 r4, u64 r5)
 {
-	if (inf == NULL){
-		printk("[KeBPF] NO ARRAY YET\n");
-		return NULL;
-	}
-	if (inf->data->index < MAX_ARRAY_ELEM){
-		//printk("[KeBPF] PREVIOUS %u %u\n", inf->data->val[inf->data->index], inf->data->index);
-		printk("[KeBPF] Adding %u to index %u\n", (unsigned long) r1, inf->data->index);
-		//inf->data->val[inf->data->index] = (u64) (long) r1;
-		inf->data->val[inf->data->index] = (u64) (long) r1;
-		//printk("[KeBPF] NEW %u %u\n", inf->data->val[inf->data->index], inf->data->index);
-		(inf->data->index)++;
-	}
-	else printk("[KeBPF] Max array length reached\n");
+    if (inf == NULL) {
+        printk("[KeBPF] NO ARRAY YET\n");
+        return;
+    }
+    if (inf->data->index < MAX_ARRAY_ELEM) {
+        //printk("[KeBPF] PREVIOUS %u %u\n", inf->data->val[inf->data->index], inf->data->index);
+        printk("[KeBPF] Adding %u to index %u\n", (unsigned long) r1,
+                inf->data->index);
+        //inf->data->val[inf->data->index] = (u64) (long) r1;
+        inf->data->val[inf->data->index] = (u64) (long) r1;
+        //printk("[KeBPF] NEW %u %u\n", inf->data->val[inf->data->index], inf->data->index);
+        (inf->data->index)++;
+    } else
+        printk("[KeBPF] Max array length reached\n");
 }
 
 static struct bpf_func_proto filter_funcs[] = {
