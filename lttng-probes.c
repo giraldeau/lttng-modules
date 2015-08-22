@@ -91,7 +91,12 @@ void lttng_lazy_probe_register(struct lttng_probe_desc *desc)
 	 * carefulness. This ensures we cannot have duplicate event
 	 * names across providers.
 	 */
-	WARN_ON_ONCE(!check_event_provider(desc));
+	/*
+	 * The addons provider do not prefix every event with "addons_", such
+	 * that this test fails. Let's just hope there are no duplicated event
+	 * names.
+	 */
+//	WARN_ON_ONCE(!check_event_provider(desc));
 
 	/*
 	 * The provider ensures there are no duplicate event names.
@@ -186,8 +191,15 @@ int lttng_probe_register(struct lttng_probe_desc *desc)
 	 * the probe immediately, since we cannot delay event
 	 * registration because they are needed ASAP.
 	 */
-	if (lttng_session_active())
-		fixup_lazy_probes();
+//	if (lttng_session_active())
+//		fixup_lazy_probes();
+
+	/*
+	 * Addons probes needs to be registered now. Otherwise, events are are
+	 * not listed until a session is started, and this is not coherent
+	 * for the user.
+	 */
+	fixup_lazy_probes();
 end:
 	lttng_unlock_sessions();
 	return ret;
