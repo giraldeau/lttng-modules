@@ -97,6 +97,7 @@ void lttng_lazy_probe_register(struct lttng_probe_desc *desc)
 	 * names.
 	 */
 //	WARN_ON_ONCE(!check_event_provider(desc));
+	(void) check_event_provider;
 
 	/*
 	 * The provider ensures there are no duplicate event names.
