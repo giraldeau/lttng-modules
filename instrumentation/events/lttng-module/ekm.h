@@ -6,7 +6,7 @@
 
 #include "../../../probes/lttng-tracepoint-event.h"
 
-LTTNG_TRACEPOINT_EVENT(ekm_foo,
+LTTNG_TRACEPOINT_EVENT(ekm_lucky_int,
 	TP_PROTO(int arg1),
 	TP_ARGS(arg1),
 	TP_FIELDS(
