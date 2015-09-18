@@ -7,6 +7,7 @@
 #include "../../../probes/lttng-tracepoint-event.h"
 #include <linux/tcp.h>
 #include <net/sock.h>
+#include <linux/blkdev.h>
 
 LTTNG_TRACEPOINT_EVENT_CLASS(inet_sock_local_template,
 	TP_PROTO(struct sock *sk, struct tcphdr *tcph),
@@ -61,6 +62,16 @@ LTTNG_TRACEPOINT_EVENT_INSTANCE(vmsync_template, vmsync_hg_guest,
 LTTNG_TRACEPOINT_EVENT_INSTANCE(vmsync_template, vmsync_hg_host,
 	TP_PROTO(unsigned int cnt, unsigned long vm_uid),
 	TP_ARGS(cnt, vm_uid))
+
+LTTNG_TRACEPOINT_EVENT(addons_elv_merge_requests,
+    TP_PROTO(struct request_queue *q, struct request *rq, struct request *next),
+    TP_ARGS(q, rq, next),
+    TP_FIELDS(
+        ctf_integer_hex(struct request_queue *, queue, q)
+        ctf_integer_hex(struct request *, curr, rq)
+        ctf_integer_hex(struct request *, next, next)
+    )
+)
 
 #endif /* LTTNG_ADDONS_H_ */
 
