@@ -13,6 +13,7 @@ obj-m += lttng-ttwu.o
 obj-m += lttng-elv.o
 obj-m += lttng-vmsync-guest.o
 obj-m += lttng-vmsync-host.o
+obj-m += lttng-vhost.o
 
 endif
 

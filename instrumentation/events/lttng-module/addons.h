@@ -73,6 +73,17 @@ LTTNG_TRACEPOINT_EVENT(addons_elv_merge_requests,
     )
 )
 
+LTTNG_TRACEPOINT_EVENT(addons_icmp_send,
+    TP_PROTO(struct sk_buff *skb_in, int type, int code, __be32 info),
+    TP_ARGS(skb_in, type, code, info),
+    TP_FIELDS(
+        ctf_integer_hex(struct sock *, skb_in, skb_in)
+        ctf_integer(int, type, type)
+        ctf_integer(int, code, code)
+        ctf_integer_network(__be32, info, info)
+    )
+)
+
 #endif /* LTTNG_ADDONS_H_ */
 
 /* This part must be outside protection */
