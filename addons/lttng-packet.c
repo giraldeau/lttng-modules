@@ -53,11 +53,28 @@ DEFINE_TRACE(inet_sock_local_out);
 
 extern struct inet_hashinfo tcp_hashinfo;
 
-unsigned int nf_hookfn_inet_local_in(const struct nf_hook_ops *ops,
-		struct sk_buff *skb,
-		const struct net_device *in,
-		const struct net_device *out,
-		int (*okfn)(struct sk_buff *))
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(4,1,0))
+#define DEFINE_NFHOOK(name) \
+unsigned int __##name(const struct nf_hook_ops *ops, \
+		struct sk_buff *skb, \
+		const struct nf_hook_state *state)
+#elif (LINUX_VERSION_CODE > KERNEL_VERSION(3,13,0))
+#define DEFINE_NFHOOK(name) \
+unsigned int __##name(const struct nf_hook_ops *ops, \
+	struct sk_buff *skb, \
+	const struct net_device *in, \
+	const struct net_device *out, \
+	int (*okfn)(struct sk_buff *))
+#else
+#define DEFINE_NFHOOK(name) \
+unsigned int __##name(unsigned int hooknum, \
+	struct sk_buff *skb, \
+	const struct net_device *in, \
+	const struct net_device *out, \
+	int (*okfn)(struct sk_buff *));
+#endif
+
+DEFINE_NFHOOK(nf_hookfn_inet_local_in)
 {
 	struct tcphdr *tcph;
 	struct sock *sk;
@@ -74,11 +91,7 @@ unsigned int nf_hookfn_inet_local_in(const struct nf_hook_ops *ops,
 	return NF_ACCEPT;
 }
 
-unsigned int nf_hookfn_inet_local_out(const struct nf_hook_ops *ops,
-		struct sk_buff *skb,
-		const struct net_device *in,
-		const struct net_device *out,
-		int (*okfn)(struct sk_buff *))
+DEFINE_NFHOOK(nf_hookfn_inet_local_out)
 {
 	struct tcphdr *tcph;
 	struct iphdr *iph = ip_hdr(skb);
@@ -92,7 +105,7 @@ unsigned int nf_hookfn_inet_local_out(const struct nf_hook_ops *ops,
 static struct nf_hook_ops nf_inet_hooks[] = {
 	{
 		.list = {NULL, NULL},
-		.hook = nf_hookfn_inet_local_in,
+		.hook = __nf_hookfn_inet_local_in,
 		.owner = THIS_MODULE,
 		.pf = PF_INET,
 		.hooknum = NF_INET_LOCAL_IN,
@@ -100,7 +113,7 @@ static struct nf_hook_ops nf_inet_hooks[] = {
 	},
 	{
 		.list = {NULL, NULL},
-		.hook = nf_hookfn_inet_local_out,
+		.hook = __nf_hookfn_inet_local_out,
 		.owner = THIS_MODULE,
 		.pf = PF_INET,
 		.hooknum = NF_INET_LOCAL_OUT,
