@@ -26,7 +26,10 @@
 #include <linux/in.h>
 #include <linux/tcp.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
+#include <net/ipv6.h>
 #include <net/inet_hashtables.h>
+#include <net/inet6_hashtables.h>
 
 #include "../wrapper/tracepoint.h"
 #define LTTNG_INSTRUMENTATION
@@ -102,6 +105,53 @@ DEFINE_NFHOOK(nf_hookfn_inet_local_out)
 	return NF_ACCEPT;
 }
 
+//#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+DEFINE_NFHOOK(nf_hookfn_inet6_local_in)
+{
+    struct ipv6hdr _ip6h;
+    struct ipv6hdr *hdr;
+    struct tcphdr *th;
+    const struct ipv6hdr *ih;
+    struct sock *sk;
+    u8 nexthdr;
+    __be16 frag_off;
+    int offset;
+
+    ih = skb_header_pointer(skb, skb_network_offset(skb), sizeof(_ip6h), &_ip6h);
+    if (!ih) {
+        goto out;
+    }
+
+    nexthdr = ih->nexthdr;
+    offset = ipv6_skip_exthdr(skb, skb_network_offset(skb) + sizeof(_ip6h),
+                  &nexthdr, &frag_off);
+
+    if (!offset || nexthdr != IPPROTO_TCP) {
+        goto out;
+    }
+
+    th = tcp_hdr(skb);
+    hdr = ipv6_hdr(skb);
+
+    sk = inet6_lookup(sock_net(skb->sk), &tcp_hashinfo,
+            &hdr->saddr, th->source,
+            &hdr->daddr, th->dest,
+            inet6_iif(skb));
+    if (!sk)
+        goto out;
+
+    trace_inet_sock_local_in(sk, th);
+    sock_put(sk);
+out:
+    return NF_ACCEPT;
+}
+
+DEFINE_NFHOOK(nf_hookfn_inet6_local_out)
+{
+    return NF_ACCEPT;
+}
+//#endif  /* IPV6 */
+
 static struct nf_hook_ops nf_inet_hooks[] = {
 	{
 		.list = {NULL, NULL},
@@ -119,6 +169,24 @@ static struct nf_hook_ops nf_inet_hooks[] = {
 		.hooknum = NF_INET_LOCAL_OUT,
 		.priority = INT_MAX,
 	},
+#if defined(CONFIG_IPV6) || defined(CONFIG_IPV6_MODULE)
+    {
+        .list = {NULL, NULL},
+        .hook = __nf_hookfn_inet6_local_in,
+        .owner = THIS_MODULE,
+        .pf = PF_INET6,
+        .hooknum = NF_INET_LOCAL_IN,
+        .priority = INT_MAX,
+    },
+    {
+        .list = {NULL, NULL},
+        .hook = __nf_hookfn_inet6_local_out,
+        .owner = THIS_MODULE,
+        .pf = PF_INET6,
+        .hooknum = NF_INET_LOCAL_OUT,
+        .priority = INT_MAX,
+    },
+#endif  /* IPV6 */
 };
 
 int nf_register(void)
