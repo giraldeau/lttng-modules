@@ -15,6 +15,11 @@
 #include "lttng-events.h"
 #include "lttng-tracer.h"
 
+#ifndef list_last_entry
+#define list_last_entry(ptr, type, member) \
+        list_entry((ptr)->prev, type, member)
+#endif
+
 #define LTTNG_DEV_NAME "lttng_list_raw"
 
 static int started = 0;

@@ -30,6 +30,12 @@
 static LIST_HEAD(probe_list);
 static DEFINE_MUTEX(probe_mutex);
 
+struct list_head *lttng_get_probe_list_head(void)
+{
+	return &probe_list;
+}
+EXPORT_SYMBOL_GPL(lttng_get_probe_list_head);
+
 static
 const struct lttng_event_desc *find_event(const char *name)
 {

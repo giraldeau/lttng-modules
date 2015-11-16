@@ -337,6 +337,10 @@ struct lttng_metadata_cache {
 	uuid_le uuid;			/* Trace session unique ID (copy) */
 };
 
+void lttng_lock_sessions(void);
+void lttng_unlock_sessions(void);
+struct list_head *lttng_get_probe_list_head(void);
+
 struct lttng_session *lttng_session_create(void);
 int lttng_session_enable(struct lttng_session *session);
 int lttng_session_disable(struct lttng_session *session);
