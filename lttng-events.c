@@ -96,11 +96,13 @@ void lttng_lock_sessions(void)
 {
 	mutex_lock(&sessions_mutex);
 }
+EXPORT_SYMBOL_GPL(lttng_lock_sessions);
 
 void lttng_unlock_sessions(void)
 {
 	mutex_unlock(&sessions_mutex);
 }
+EXPORT_SYMBOL_GPL(lttng_unlock_sessions);
 
 /*
  * Called with sessions lock held.

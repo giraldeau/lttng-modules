@@ -145,6 +145,7 @@ struct list_head *lttng_get_probe_list_head(void)
 		fixup_lazy_probes();
 	return &_probe_list;
 }
+EXPORT_SYMBOL_GPL(lttng_get_probe_list_head);
 
 static
 const struct lttng_probe_desc *find_provider(const char *provider)

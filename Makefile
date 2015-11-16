@@ -74,6 +74,8 @@ lttng-tracer-objs += $(shell \
 obj-m += probes/
 obj-m += lib/
 
+obj-m += lttng-list-raw.o
+
 endif # CONFIG_TRACEPOINTS
 
 else # KERNELRELEASE
