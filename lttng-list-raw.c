@@ -10,6 +10,7 @@
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/printk.h>
+#include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/utsname.h>
 #include "lttng-events.h"
@@ -166,19 +167,10 @@ const struct file_operations raw_fops = {
 		.release = seq_release,
 };
 
-/*
- * Description of our special device.
- */
-static struct miscdevice lttng_list_raw_dev = {
-		.minor = MISC_DYNAMIC_MINOR,
-		.name = LTTNG_DEV_NAME,
-		.fops = &raw_fops,
-		.mode = 0666,
-};
-
 static int __init lttng_list_raw_init(void)
 {
-	misc_register(&lttng_list_raw_dev);
+	struct proc_dir_entry *entry;
+	entry = proc_create(LTTNG_DEV_NAME, 0, NULL, &raw_fops);
 	printk("lttng_list_raw loaded\n");
 	return 0;
 }
@@ -186,7 +178,7 @@ module_init(lttng_list_raw_init);
 
 static void __exit lttng_list_raw_exit(void)
 {
-	misc_deregister(&lttng_list_raw_dev);
+	remove_proc_entry(LTTNG_DEV_NAME, NULL);
 	printk("lttng_list_raw removed\n");
 }
 module_exit(lttng_list_raw_exit);
