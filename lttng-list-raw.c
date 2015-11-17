@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/printk.h>
 #include <linux/seq_file.h>
+#include <linux/proc_fs.h>
 #include <linux/utsname.h>
 #include "lttng-events.h"
 #include "lttng-tracer.h"
@@ -60,8 +61,9 @@ void *tp_list_start(struct seq_file *m, loff_t *pos)
 		for (i = 0; i < probe_desc->nr_events; i++) {
 			last_entry = (probe_desc == probe_last) &&
 					(i == (probe_desc->nr_events - 1));
-			if (iter++ >= *pos)
+			if (iter++ >= *pos) {
 				return (void *) probe_desc->event_desc[i];
+			}
 		}
 	}
 	/* End of list */
@@ -83,8 +85,9 @@ void *tp_list_next(struct seq_file *m, void *p, loff_t *ppos)
 		for (i = 0; i < probe_desc->nr_events; i++) {
 			last_entry = (probe_desc == probe_last) &&
 					(i == (probe_desc->nr_events - 1));
-			if (iter++ >= *ppos)
+			if (iter++ >= *ppos) {
 				return (void *) probe_desc->event_desc[i];
+			}
 		}
 	}
 	/* End of list */
@@ -95,7 +98,6 @@ static
 void tp_list_stop(struct seq_file *m, void *p)
 {
 	lttng_unlock_sessions();
-
 	if (!p) {
 		seq_printf(m, " ]\n}\n");
 		started = 0;
@@ -171,19 +173,10 @@ const struct file_operations raw_fops = {
 		.release = seq_release,
 };
 
-/*
- * Description of our special device.
- */
-static struct miscdevice lttng_list_raw_dev = {
-		.minor = MISC_DYNAMIC_MINOR,
-		.name = LTTNG_DEV_NAME,
-		.fops = &raw_fops,
-		.mode = 0666,
-};
-
 static int __init lttng_list_raw_init(void)
 {
-	misc_register(&lttng_list_raw_dev);
+	struct proc_dir_entry *entry;
+	entry = proc_create(LTTNG_DEV_NAME, 0, NULL, &raw_fops);
 	printk("lttng_list_raw loaded\n");
 	return 0;
 }
@@ -191,7 +184,7 @@ module_init(lttng_list_raw_init);
 
 static void __exit lttng_list_raw_exit(void)
 {
-	misc_deregister(&lttng_list_raw_dev);
+	remove_proc_entry(LTTNG_DEV_NAME, NULL);
 	printk("lttng_list_raw removed\n");
 }
 module_exit(lttng_list_raw_exit);

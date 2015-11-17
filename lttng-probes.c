@@ -36,6 +36,18 @@ struct list_head *lttng_get_probe_list_head(void)
 }
 EXPORT_SYMBOL_GPL(lttng_get_probe_list_head);
 
+void lttng_lock_sessions(void)
+{
+	mutex_lock(&probe_mutex);
+}
+EXPORT_SYMBOL_GPL(lttng_lock_sessions);
+
+void lttng_unlock_sessions(void)
+{
+	mutex_unlock(&probe_mutex);
+}
+EXPORT_SYMBOL_GPL(lttng_unlock_sessions);
+
 static
 const struct lttng_event_desc *find_event(const char *name)
 {

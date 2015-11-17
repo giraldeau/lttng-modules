@@ -47,18 +47,6 @@ static LIST_HEAD(lttng_transport_list);
 static DEFINE_MUTEX(sessions_mutex);
 static struct kmem_cache *event_cache;
 
-void lttng_lock_sessions(void)
-{
-	mutex_lock(&sessions_mutex);
-}
-EXPORT_SYMBOL_GPL(lttng_lock_sessions);
-
-void lttng_unlock_sessions(void)
-{
-	mutex_unlock(&sessions_mutex);
-}
-EXPORT_SYMBOL_GPL(lttng_unlock_sessions);
-
 static void _lttng_event_destroy(struct lttng_event *event);
 static void _lttng_channel_destroy(struct lttng_channel *chan);
 static int _lttng_event_unregister(struct lttng_event *event);
