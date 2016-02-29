@@ -33,19 +33,10 @@
 
 DEFINE_TRACE(addons_elv_merge_requests);
 
-static int x;
-DEFINE_SPINLOCK(lock);
-
 static int
 lttng_elv_probe(struct request_queue *q, struct request *rq,
         struct request *next)
 {
-    int count;
-
-    spin_lock(&lock);
-    count = x++;
-    spin_unlock(&lock);
-    printk("elv_merge_requests\n %d", count);
     trace_addons_elv_merge_requests(q, rq, next);
 	jprobe_return();
 	return 0;
