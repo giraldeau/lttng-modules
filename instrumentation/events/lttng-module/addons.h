@@ -64,13 +64,13 @@ LTTNG_TRACEPOINT_EVENT_INSTANCE(vmsync_template, vmsync_hg_host,
 	TP_ARGS(cnt, vm_uid))
 
 LTTNG_TRACEPOINT_EVENT(addons_elv_merge_requests,
-    TP_PROTO(struct request_queue *q, struct request *rq, struct request *next),
-    TP_ARGS(q, rq, next),
-    TP_FIELDS(
-        ctf_integer_hex(struct request_queue *, queue, q)
-        ctf_integer_hex(struct request *, curr, rq)
-        ctf_integer_hex(struct request *, next, next)
-    )
+	TP_PROTO(struct request_queue *q, struct request *rq, struct request *next),
+	TP_ARGS(q, rq, next),
+	TP_FIELDS(
+		ctf_integer_hex(struct request_queue *, queue, q)
+		ctf_integer_hex(struct request *, curr, rq)
+		ctf_integer_hex(struct request *, next, next)
+	)
 )
 
 #endif /* LTTNG_ADDONS_H_ */
