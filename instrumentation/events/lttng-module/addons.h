@@ -73,6 +73,17 @@ LTTNG_TRACEPOINT_EVENT(addons_elv_merge_requests,
 	)
 )
 
+// tracepoint used in lttng-profile.c
+LTTNG_TRACEPOINT_EVENT(syscall_latency,
+	TP_PROTO(u64 start_ts, u64 duration, int id),
+	TP_ARGS(start_ts, duration, id),
+	TP_FIELDS(
+		ctf_integer(u64, start, start_ts)
+		ctf_integer(u64, duration, duration)
+		ctf_integer(int, id, id)
+	)
+)
+
 #endif /* LTTNG_ADDONS_H_ */
 
 /* This part must be outside protection */
