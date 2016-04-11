@@ -259,6 +259,7 @@ endif # CONFIG_KRETPROBES
 
 ifneq ($(CONFIG_DYNAMIC_FTRACE),)
   obj-$(CONFIG_LTTNG) += lttng-ftrace.o
+  obj-$(CONFIG_LTTNG) += lttng-fgraph.o
 endif # CONFIG_DYNAMIC_FTRACE
 
 obj-$(CONFIG_LTTNG) += lttng-test.o
