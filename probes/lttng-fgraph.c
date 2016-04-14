@@ -25,37 +25,47 @@
 #include <linux/ftrace.h>
 #include <linux/printk.h>
 #include <wrapper/kallsyms.h>
+#include <wrapper/ftrace.h>
 #include <wrapper/tracepoint.h>
 #include <wrapper/vmalloc.h>
 #include <lttng-tracer.h>
+#include <linux/types.h>
 
 static int (*register_ftrace_graph_sym)(trace_func_graph_ret_t retfunc,
 			trace_func_graph_ent_t entryfunc);
 static void (*unregister_ftrace_graph_sym)(void);
 
-// called by prepare_ftrace_return()
-int lttng_fgraph_hook_entry(struct ftrace_graph_ent *ent)
-{
-	if (printk_ratelimit()) {
-		printk("lttng_fgraph_hook_return\n");
-	}
+static atomic_t entries = ATOMIC_INIT(0);
+static atomic_t returns = ATOMIC_INIT(0);
 
+// called by prepare_ftrace_return()
+int notrace lttng_fgraph_hook_entry(struct ftrace_graph_ent *ent)
+{
+	atomic_inc(&entries);
 	return 1;
 }
 
 // called by ftrace_return_to_handler()
-void lttng_fgraph_hook_return(struct ftrace_graph_ret *ret)
+void notrace lttng_fgraph_hook_return(struct ftrace_graph_ret *ret)
 {
-	if (printk_ratelimit()) {
-		printk("lttng_fgraph_hook_return\n");
-	}
+	atomic_inc(&returns);
+}
+
+void notrace lttng_fgraph_hook(void)
+{
+	return;
 }
 
 static int __init lttng_fgraph_init(void)
 {
 	int ret = 0;
 
+	struct ftrace_ops ops;
+
+
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
+
+	//wrapper_register_ftrace_function_probe("do_IRQ", );
 
 	register_ftrace_graph_sym = (void *) kallsyms_lookup_funcptr("register_ftrace_graph");
 	unregister_ftrace_graph_sym = (void *) kallsyms_lookup_funcptr("unregister_ftrace_graph");
@@ -85,6 +95,8 @@ static void __exit lttng_fgraph_exit(void)
 	}
 
 	printk("lttng-fgraph removed\n");
+	printk("entries=%d returns=%d\n", atomic_read(&entries),
+			atomic_read(&returns));
 }
 module_exit(lttng_fgraph_exit);
 
