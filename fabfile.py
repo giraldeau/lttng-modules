@@ -10,22 +10,25 @@ def setup():
     ctx = {
         'user': env.user,
         'host': env.host,
+        'branch': 'fgraph',
         'repo': 'repo/lttng-modules-dev.git',
     }
     with settings(warn_only=True):
         local("git remote remove tst-%(host)s" % ctx)
     local("git remote add tst-%(host)s ssh://%(user)s@%(host)s/home/%(user)s/%(repo)s" % ctx)
-    local("git push tst-%(host)s master" % {'host': env.host})
+    local("git push tst-%(host)s master" % ctx)
     run("rm -rf lttng-modules-dev")
     run("git clone repo/lttng-modules-dev.git lttng-modules-dev")
+    with cd("lttng-modules-dev"):
+        run("git checkout origin/%(branch)s" % ctx)
+        run("git checkout -b fgraph")
 
 @task
 def deploy():
     branch = "fgraph"
     local("git push tst-%(host)s %(branch)s" % {'host': env.host, 'branch': branch})
     with cd("lttng-modules-dev"):
-        run("git checkout %(branch)s" % {'branch': branch})
-        run("git pull")
+        run("git pull origin fgraph")
         run("make -j12")
         sudo("make modules_install")
         sudo("depmod -a")
