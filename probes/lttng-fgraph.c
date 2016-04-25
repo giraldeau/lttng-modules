@@ -34,44 +34,54 @@
 static int (*register_ftrace_graph_sym)(trace_func_graph_ret_t retfunc,
 			trace_func_graph_ent_t entryfunc);
 static void (*unregister_ftrace_graph_sym)(void);
+static unsigned long root_func_sym;
 
 static atomic_t entries = ATOMIC_INIT(0);
 static atomic_t returns = ATOMIC_INIT(0);
 
 // called by prepare_ftrace_return()
-int notrace lttng_fgraph_hook_entry(struct ftrace_graph_ent *ent)
+// The corresponding return hook is called only when this function returns 1
+int notrace lttng_fgraph_hook_entry(struct ftrace_graph_ent *trace)
 {
+	/*
+	 * If trace->depth is greater than zero, it means we are within
+	 * the root function and its children.
+	 *
+	 * If trace->depth is zero, we check if the current function is a root
+	 * function. In this case, we start tracing.
+	 */
+	barrier();
+	if (trace->depth == 0 && trace->func != root_func_sym) {
+		return 0;
+	}
+
 	atomic_inc(&entries);
 	return 1;
 }
 
 // called by ftrace_return_to_handler()
-void notrace lttng_fgraph_hook_return(struct ftrace_graph_ret *ret)
+void notrace lttng_fgraph_hook_return(struct ftrace_graph_ret *trace)
 {
 	atomic_inc(&returns);
-}
-
-void notrace lttng_fgraph_hook(void)
-{
-	return;
 }
 
 static int __init lttng_fgraph_init(void)
 {
 	int ret = 0;
 
-	struct ftrace_ops ops;
-
-
 	(void) wrapper_lttng_fixup_sig(THIS_MODULE);
-
-	//wrapper_register_ftrace_function_probe("do_IRQ", );
 
 	register_ftrace_graph_sym = (void *) kallsyms_lookup_funcptr("register_ftrace_graph");
 	unregister_ftrace_graph_sym = (void *) kallsyms_lookup_funcptr("unregister_ftrace_graph");
-
-	printk("register %p unregister %p\n", register_ftrace_graph_sym, unregister_ftrace_graph_sym );
-	if (!register_ftrace_graph_sym || !unregister_ftrace_graph_sym) {
+	root_func_sym = kallsyms_lookup_funcptr("vfs_fstat");
+	barrier();
+	printk("register=%p unregister=%p root_func=%p\n",
+			register_ftrace_graph_sym,
+			unregister_ftrace_graph_sym,
+			(void *) root_func_sym);
+	if (!register_ftrace_graph_sym ||
+	    !unregister_ftrace_graph_sym ||
+	    !root_func_sym) {
 		ret = -1;
 		goto out;
 	}
