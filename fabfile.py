@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from fabric.api import task, run, env, sudo, local, cd, settings
-import time
+from fabric.api import task, run, env, sudo, local, cd, settings, execute
+import time, os
 
 @task
 def setup():
@@ -22,11 +22,13 @@ def setup():
     with cd("lttng-modules-dev"):
         run("git checkout origin/%(branch)s" % ctx)
         run("git checkout -b fgraph")
+    run("git config --global user.email test@example.com")
+    run("git config --global user.name test")
 
 @task
 def deploy():
     branch = "fgraph"
-    local("git push tst-%(host)s %(branch)s" % {'host': env.host, 'branch': branch})
+    local("git push -f tst-%(host)s %(branch)s" % {'host': env.host, 'branch': branch})
     with cd("lttng-modules-dev"):
         run("git pull origin fgraph")
         run("make -j12")
@@ -34,10 +36,31 @@ def deploy():
         sudo("depmod -a")
         run("sync")
 
-@task
-def check():
+def go(fn):
     sudo("dmesg -c > /dev/null")
     sudo("modprobe lttng-fgraph")
-    time.sleep(1)
+    try:
+        fn()
+    except Exception as e:
+        print(e)
     sudo("rmmod lttng-fgraph")
     sudo("dmesg -c")
+
+@task
+def check():
+    go(lambda: time.sleep(0.01))
+
+def do_stat(repeat):
+    for i in range(repeat):
+        print("stat {}".format(i))
+        run("stat $HOME > /dev/null")
+
+@task
+def check_stat():
+    go(lambda: do_stat(0))
+    go(lambda: do_stat(1))
+
+@task
+def stress():
+    for i in range(10):
+        execute(check)
