@@ -30,7 +30,8 @@ def deploy():
     branch = "fgraph"
     local("git push -f tst-%(host)s %(branch)s" % {'host': env.host, 'branch': branch})
     with cd("lttng-modules-dev"):
-        run("git pull origin fgraph")
+        run("git fetch origin fgraph")
+        run("git reset --hard FETCH_HEAD")
         run("make -j12")
         sudo("make modules_install")
         sudo("depmod -a")
