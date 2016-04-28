@@ -130,7 +130,7 @@ static int __init lttng_fgraph_init(void)
 		return -1;
 	}
 
-	parent_sym = kallsyms_lookup_funcptr("do_IRQ");
+	parent_sym = kallsyms_lookup_funcptr("do_sys_open");
 	if (!parent_sym) {
 		printk("kallsyms lookup failed\n");
 		return -1;
