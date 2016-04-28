@@ -62,6 +62,10 @@ int notrace lttng_fgraph_entry(struct ftrace_graph_ent *trace)
 	int ret = 0;
 	int bit;
 
+	// For now, only trace normal context
+	if (in_interrupt())
+		return 0;
+
 	/*
 	 * If trace->depth is greater than zero, it means we are within
 	 * the root function and its children.
