@@ -9,6 +9,9 @@ ifneq ($(KERNELRELEASE),)
 
   ifneq ($(CONFIG_TRACEPOINTS),)
 
+    ORIG_CFLAGS := $(KBUILD_CFLAGS)
+    KBUILD_CFLAGS = $(subst $(CC_FLAGS_FTRACE),,$(ORIG_CFLAGS))
+
     TOP_LTTNG_MODULES_DIR := $(shell dirname $(lastword $(MAKEFILE_LIST)))
 
     lttng_check_linux_version = $(shell pwd)/include/linux/version.h
