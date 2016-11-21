@@ -246,7 +246,8 @@ long lttng_abi_add_context(struct file *file,
 	case LTTNG_KERNEL_CONTEXT_MIGRATABLE:
 		return lttng_add_migratable_to_ctx(ctx);
 	case LTTNG_KERNEL_CONTEXT_CALLSTACK_KERNEL:
-	case LTTNG_KERNEL_CONTEXT_CALLSTACK_USER:
+	case LTTNG_KERNEL_CONTEXT_CALLSTACK_USER_FP:
+	case LTTNG_KERNEL_CONTEXT_CALLSTACK_USER_UNW:
 		return lttng_add_callstack_to_ctx(ctx, context_param->ctx);
 	default:
 		return -EINVAL;

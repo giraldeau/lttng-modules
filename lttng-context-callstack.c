@@ -66,7 +66,8 @@
 
 enum lttng_cs_ctx_modes {
 	CALLSTACK_KERNEL = 0,
-	CALLSTACK_USER = 1,
+	CALLSTACK_USER_FP = 1,
+	CALLSTACK_USER_UNW = 2,
 	NR_CALLSTACK_MODES,
 };
 
@@ -97,7 +98,12 @@ static struct lttng_cs_type cs_types[] = {
 		.save_func	= NULL,
 	},
 	{
-		.name		= "callstack_user",
+		.name		= "callstack_user_fp",
+		.save_func_name	= "save_stack_trace_user",
+		.save_func	= NULL,
+	},
+	{
+		.name		= "callstack_user_unwind",
 		.save_func_name	= "save_stack_trace_user",
 		.save_func	= NULL,
 	},
@@ -348,8 +354,10 @@ int lttng_add_callstack_to_ctx(struct lttng_ctx **ctx, int type)
 	switch (type) {
 	case LTTNG_KERNEL_CONTEXT_CALLSTACK_KERNEL:
 		return __lttng_add_callstack_generic(ctx, CALLSTACK_KERNEL);
-	case LTTNG_KERNEL_CONTEXT_CALLSTACK_USER:
-		return __lttng_add_callstack_generic(ctx, CALLSTACK_USER);
+	case LTTNG_KERNEL_CONTEXT_CALLSTACK_USER_FP:
+		return __lttng_add_callstack_generic(ctx, CALLSTACK_USER_FP);
+	case LTTNG_KERNEL_CONTEXT_CALLSTACK_USER_UNW:
+		return __lttng_add_callstack_generic(ctx, CALLSTACK_USER_UNW);
 	default:
 		return -EINVAL;
 	}
