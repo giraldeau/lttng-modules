@@ -104,7 +104,7 @@ static struct lttng_cs_type cs_types[] = {
 	},
 	{
 		.name		= "callstack_user_unwind",
-		.save_func_name	= "save_stack_trace_user",
+		.save_func_name	= "save_stack_trace_kunwind",
 		.save_func	= NULL,
 	},
 };
